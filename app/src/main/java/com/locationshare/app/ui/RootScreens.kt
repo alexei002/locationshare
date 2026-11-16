@@ -29,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +59,30 @@ fun AppRoot() {
     }
     val group by Prefs.groupCodeFlow.collectAsState()
 
+    // Автозапрос разрешений при первом запуске — не ждём нажатия кнопки.
+    // Один раз на установку: после отказа повторный запрос — только по кнопке.
+    LaunchedEffect(Unit) {
+        if (!granted && !Prefs.permAutoAsked) {
+            Prefs.permAutoAsked = true
+            launcher.launch(locationPerms())
+        }
+    }
+
+    // Сразу после выдачи локации — исключение из оптимизации батареи (один раз).
+    // Системные диалоги показываются последовательно: сначала локация, затем батарея.
+    var askBattery by remember { mutableStateOf(false) }
+    LaunchedEffect(granted) {
+        if (granted && !Prefs.batteryAsked) {
+            val ignoring = try {
+                ctx.getSystemService(android.os.PowerManager::class.java)
+                    .isIgnoringBatteryOptimizations(ctx.packageName)
+            } catch (_: Exception) {
+                false
+            }
+            if (ignoring) Prefs.batteryAsked = true else askBattery = true
+        }
+    }
+
     // После возврата из системных настроек разрешение могло быть выдано вручную
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner) {
@@ -70,19 +95,26 @@ fun AppRoot() {
 
     when {
         !granted -> PermissionsScreen(
-            onRequest = {
-                val perms = mutableListOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                )
-                if (Build.VERSION.SDK_INT >= 33) perms.add(Manifest.permission.POST_NOTIFICATIONS)
-                launcher.launch(perms.toTypedArray())
-            },
+            onRequest = { launcher.launch(locationPerms()) },
             permanentlyDenied = permanentlyDenied,
         )
         group == null -> GroupScreen()
         else -> MainScreen()
     }
+
+    if (askBattery) BatteryDialog {
+        askBattery = false
+        Prefs.batteryAsked = true
+    }
+}
+
+private fun locationPerms(): Array<String> {
+    val perms = mutableListOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+    if (Build.VERSION.SDK_INT >= 33) perms.add(Manifest.permission.POST_NOTIFICATIONS)
+    return perms.toTypedArray()
 }
 
 private fun hasLocation(ctx: Context): Boolean =

@@ -836,8 +836,9 @@ private fun DeviceChip(d: Repo.DeviceState, color: Int, tick: Int, onClick: () -
     }
 }
 
+// internal: вызывается также из AppRoot — автозапрос сразу после выдачи локации
 @Composable
-private fun BatteryDialog(onDismiss: () -> Unit) {
+fun BatteryDialog(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,

@@ -49,6 +49,16 @@ object Prefs {
         get() = sp.getBoolean("onboarded", false)
         set(v) { sp.edit().putBoolean("onboarded", v).apply() }
 
+    // Автозапрос разрешений при старте уже выполнялся (один раз на установку)
+    var permAutoAsked: Boolean
+        get() = sp.getBoolean("permAutoAsked", false)
+        set(v) { sp.edit().putBoolean("permAutoAsked", v).apply() }
+
+    // Автозапрос исключения из оптимизации батареи уже показывался
+    var batteryAsked: Boolean
+        get() = sp.getBoolean("batteryAsked", false)
+        set(v) { sp.edit().putBoolean("batteryAsked", v).apply() }
+
     fun init(context: Context) {
         if (::sp.isInitialized) return
         appContext = context.applicationContext
