@@ -26,7 +26,7 @@ class MainActivity : ComponentActivity() {
                 Lifecycle.Event.ON_START -> {
                     // Перезапуск сервиса, если система его убила, и отметка «карта видна»
                     // (видимая карта = чаще и точнее, скрытая = экономный режим GPS)
-                    if (Prefs.sharing && !Prefs.eco && LocationService.hasPermission(this)) {
+                    if (!Prefs.eco && LocationService.hasPermission(this)) {
                         ContextCompat.startForegroundService(
                             this, LocationService.intent(this, LocationService.ACTION_MAP_VISIBLE)
                         )

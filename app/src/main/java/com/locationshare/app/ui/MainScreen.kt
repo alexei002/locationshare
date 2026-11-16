@@ -114,7 +114,6 @@ import kotlinx.coroutines.launch
 fun MainScreen() {
     val ctx = LocalContext.current
     val group = Prefs.groupCode ?: return
-    val sharing by Prefs.sharingFlow.collectAsState()
     val eco by Prefs.ecoFlow.collectAsState()
     var devices by remember { mutableStateOf<List<Repo.DeviceState>>(emptyList()) }
     var showSettings by remember { mutableStateOf(false) }
@@ -170,13 +169,13 @@ fun MainScreen() {
         }
     }
 
-    LaunchedEffect(sharing, eco) {
-        if (sharing && !eco) LocationService.start(ctx)
+    LaunchedEffect(eco) {
+        if (!eco) LocationService.start(ctx)
         else LocationService.stop(ctx)
         // Watchdog-аларм: точка не реже чем раз в 10 мин, даже если систему убила сервис
-        if (sharing && !eco) WatchdogReceiver.schedule(ctx)
+        if (!eco) WatchdogReceiver.schedule(ctx)
         else WatchdogReceiver.cancel(ctx)
-        if (sharing && eco) EcoWorker.schedule(ctx)
+        if (eco) EcoWorker.schedule(ctx)
         else EcoWorker.cancel(ctx)
     }
 
@@ -432,25 +431,7 @@ fun MainScreen() {
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.weight(1f),
                     ) {
-                        if (!sharing) {
-                            item {
-                                // Тап по «гео выключено» открывает настройки
-                                Surface(
-                                    onClick = { showSettings = true },
-                                    shape = RoundedCornerShape(50),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.padding(vertical = 2.dp),
-                                ) {
-                                    Text(
-                                        stringResource(R.string.chip_geo_off),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.outline,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    )
-                                }
-                            }
-                        }
-                        if (devices.isEmpty() && sharing) {
+                        if (devices.isEmpty()) {
                             item {
                                 Text(
                                     stringResource(R.string.chip_waiting_for_points),
@@ -564,7 +545,6 @@ private fun SettingsScreen(
     adminId: String?,
     devices: List<Repo.DeviceState>,
 ) {
-    val sharing by Prefs.sharingFlow.collectAsState()
     val eco by Prefs.ecoFlow.collectAsState()
     val group = Prefs.groupCode ?: ""
     var showBat by remember { mutableStateOf(false) }
@@ -596,12 +576,6 @@ private fun SettingsScreen(
                     Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_close))
                 }
             }
-            ToggleRow(
-                title = stringResource(R.string.settings_share_geo_title),
-                subtitle = if (eco) stringResource(R.string.settings_share_geo_subtitle_eco)
-                else stringResource(R.string.settings_share_geo_subtitle_adaptive),
-                checked = sharing,
-            ) { Prefs.sharing = it }
             ToggleRow(
                 title = stringResource(R.string.settings_eco_title),
                 subtitle = stringResource(R.string.settings_eco_subtitle),

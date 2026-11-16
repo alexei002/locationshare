@@ -19,7 +19,6 @@
     <string name="btn_all">Все</string>
     <string name="cd_show_all_devices">Показать все устройства</string>
     <string name="cd_center_on_me">Центрировать на мне</string>
-    <string name="chip_geo_off">гео выключено</string>
     <string name="chip_waiting_for_points">ждём точки…</string>
 
     <!-- contentDescription -->
@@ -52,9 +51,6 @@
 
     <!-- Настройки -->
     <string name="settings_title">Настройки</string>
-    <string name="settings_share_geo_title">Передавать гео</string>
-    <string name="settings_share_geo_subtitle_eco">Эко: обновление раз в 15 мин</string>
-    <string name="settings_share_geo_subtitle_adaptive">Адаптивно: точнее в движении, экономнее на месте</string>
     <string name="settings_eco_title">Эко-режим</string>
     <string name="settings_eco_subtitle">Минимум батареи: без постоянного сервиса, раз в 15 мин</string>
     <string name="settings_device_name_label">Имя устройства</string>

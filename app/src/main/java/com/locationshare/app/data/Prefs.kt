@@ -30,7 +30,6 @@ object Prefs {
 
     val deviceNameFlow = MutableStateFlow("")
     val groupCodeFlow = MutableStateFlow<String?>(null)
-    val sharingFlow = MutableStateFlow(false)
     val ecoFlow = MutableStateFlow(false)
 
     var deviceName: String
@@ -40,10 +39,6 @@ object Prefs {
     var groupCode: String?
         get() = groupCodeFlow.value
         set(v) { groupCodeFlow.value = v; sp.edit().putString("group", v).apply() }
-
-    var sharing: Boolean
-        get() = sharingFlow.value
-        set(v) { sharingFlow.value = v; sp.edit().putBoolean("sharing", v).apply() }
 
     var eco: Boolean
         get() = ecoFlow.value
@@ -60,7 +55,6 @@ object Prefs {
         sp = appContext.getSharedPreferences("prefs", Context.MODE_PRIVATE)
         deviceNameFlow.value = sp.getString("name", null) ?: Build.MODEL
         groupCodeFlow.value = sp.getString("group", null)
-        sharingFlow.value = sp.getBoolean("sharing", true)
         ecoFlow.value = sp.getBoolean("eco", false)
     }
 

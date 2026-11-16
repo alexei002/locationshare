@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 class EcoWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
 
     override suspend fun doWork(): Result {
-        if (!Prefs.sharing || !Prefs.eco) return Result.success()
+        if (!Prefs.eco) return Result.success()
         val code = Prefs.groupCode ?: return Result.success()
         val fused = LocationServices.getFusedLocationProviderClient(applicationContext)
 

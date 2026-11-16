@@ -115,7 +115,7 @@ class LocationService : Service() {
 
         startAsForeground()
 
-        if (!Prefs.sharing || Prefs.eco) {
+        if (Prefs.eco) {
             unregister()
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -208,7 +208,7 @@ class LocationService : Service() {
     // Свайп из недавних: MIUI убивает процесс — перезапускаем сервис через полторы секунды
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
-        if (Prefs.sharing && !Prefs.eco) {
+        if (!Prefs.eco) {
             // Цепочка watchdog-алармов — она поднимет сервис, но не раньше чем через 10 мин
             WatchdogReceiver.schedule(this)
             try {

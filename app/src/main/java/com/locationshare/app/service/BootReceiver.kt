@@ -9,7 +9,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         Prefs.init(context)
-        if (Prefs.sharing && !Prefs.eco) {
+        if (!Prefs.eco) {
             // На Android 15+ старт location-FGS из BOOT_COMPLETED может не пройти —
             // аларм-цепочка поднимет сервис через 10 мин, если что
             WatchdogReceiver.schedule(context)
