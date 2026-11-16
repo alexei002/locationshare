@@ -11,6 +11,14 @@ private val PALETTE = intArrayOf(
 
 internal fun colorFor(id: String): Int = PALETTE[abs(id.hashCode()) % PALETTE.size]
 
+/**
+ * Стабильное назначение цветов устройствам: ids сортируются и получают цвета палитры
+ * по порядку, циклично при >8 устройствах. В отличие от hash в colorFor не даёт
+ * дублей цветов, пока устройств не больше 8.
+ */
+internal fun colorMapFor(ids: Collection<String>): Map<String, Int> =
+    ids.sorted().withIndex().associate { (i, id) -> id to PALETTE[i % PALETTE.size] }
+
 internal fun timeAgo(ts: Long): String {
     if (ts <= 0) return "—"
     val d = System.currentTimeMillis() - ts

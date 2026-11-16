@@ -1,3 +1,89 @@
 <resources>
     <string name="app_name">LocationShare</string>
+
+    <!-- Общие кнопки -->
+    <string name="btn_ok">OK</string>
+    <string name="btn_close">Закрыть</string>
+    <string name="btn_cancel">Отмена</string>
+    <string name="btn_delete">Удалить</string>
+    <string name="btn_copy">Копировать</string>
+    <string name="btn_install">Установить</string>
+    <string name="btn_later">Позже</string>
+    <string name="btn_got_it">Понятно</string>
+    <string name="btn_found">Нашёл</string>
+    <string name="btn_mute">Заглушить</string>
+    <string name="btn_ring">Прозвонить</string>
+    <string name="btn_remove_from_group">Удалить из группы</string>
+
+    <!-- Карта -->
+    <string name="btn_all">Все</string>
+    <string name="cd_show_all_devices">Показать все устройства</string>
+    <string name="cd_center_on_me">Центрировать на мне</string>
+    <string name="chip_geo_off">гео выключено</string>
+    <string name="chip_waiting_for_points">ждём точки…</string>
+
+    <!-- contentDescription -->
+    <string name="cd_close">Закрыть</string>
+    <string name="cd_ring">Прозвонить</string>
+    <string name="cd_remove_from_group">Удалить из группы</string>
+    <string name="cd_settings">Настройки</string>
+    <string name="cd_qr_group">QR группы</string>
+
+    <!-- Диалоги -->
+    <string name="dialog_ring_title">Найти устройство</string>
+    <string name="dialog_phone_searched_title">Телефон ищут</string>
+    <string name="dialog_ringing_body">Громкий сигнал продлится до 90 секунд.</string>
+    <string name="dialog_delete_device_title">Удалить устройство</string>
+    <string name="dialog_invite_title">Пригласите близких</string>
+    <string name="dialog_invite_body">Покажите QR-код группы: Настройки → QR группы. Наведите камеру другого устройства — группа подставится автоматически.</string>
+    <string name="dialog_qr_hint">Наведите камеру другого устройства на этот QR (кнопка «Присоединиться по QR») — группа подставится автоматически.</string>
+    <string name="dialog_leave_title">Выйти из группы?</string>
+    <string name="btn_copy_and_leave">Копировать и выйти</string>
+    <string name="dialog_battery_title">Экономия батареи</string>
+    <string name="dialog_battery_step1">1. Сейчас откроется системный запрос — разрешите «Не оптимизировать».</string>
+    <string name="dialog_battery_step2">2. MIUI: Настройки → Приложения → LocationShare → Контроль активности → «Нет ограничений»; Автозапуск — вкл.</string>
+    <string name="dialog_battery_step3">3. MIUI: в меню недавних приложений задержите карточку и нажмите замочек 🔒.</string>
+
+    <!-- Тосты -->
+    <string name="toast_command_sent">Команда отправлена</string>
+    <string name="toast_device_removed">Устройство удалено</string>
+    <string name="toast_code_copied">Код скопирован</string>
+    <string name="toast_qr_invalid">QR не похож на код группы</string>
+
+    <!-- Настройки -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_share_geo_title">Передавать гео</string>
+    <string name="settings_share_geo_subtitle_eco">Эко: обновление раз в 15 мин</string>
+    <string name="settings_share_geo_subtitle_adaptive">Адаптивно: точнее в движении, экономнее на месте</string>
+    <string name="settings_eco_title">Эко-режим</string>
+    <string name="settings_eco_subtitle">Минимум батареи: без постоянного сервиса, раз в 15 мин</string>
+    <string name="settings_device_name_label">Имя устройства</string>
+    <string name="settings_admin_section">Администрирование</string>
+    <string name="settings_admin_none">Администратор не назначен</string>
+    <string name="btn_become_admin">Стать администратором</string>
+    <string name="settings_admin_you">Вы администратор группы</string>
+    <string name="btn_qr_group">QR группы</string>
+    <string name="btn_change_group">Сменить</string>
+    <string name="btn_battery">Батарея</string>
+    <string name="btn_check_updates">Проверить обновления</string>
+    <string name="btn_open_release_page">Открыть страницу релиза в браузере</string>
+    <string name="update_state_checking">проверяю…</string>
+    <string name="update_state_up_to_date">у вас последняя версия</string>
+    <string name="update_state_not_configured">не настроено</string>
+
+    <!-- Экран разрешений -->
+    <string name="permissions_body">Показывает местоположение вашей группы на Яндекс.Картах. Нужен доступ к геолокации — только для этого.</string>
+    <string name="permissions_battery_hint">Батарея: GPS используется по минимуму — активнее только пока открыта карта.</string>
+    <string name="btn_allow_location">Разрешить геолокацию</string>
+    <string name="permissions_denied_body">Доступ к геолокации отключён в настройках. Разрешите его вручную.</string>
+    <string name="btn_open_settings">Открыть настройки</string>
+
+    <!-- Экран группы -->
+    <string name="group_screen_title">Группа</string>
+    <string name="group_screen_hint">Введите один и тот же код на всех устройствах, чтобы видеть друг друга.</string>
+    <string name="group_code_label">Код группы</string>
+    <string name="btn_join">Войти</string>
+    <string name="btn_create_group">Создать группу</string>
+    <string name="qr_scan_prompt">Наведите камеру на QR-код группы</string>
+    <string name="btn_join_by_qr">"📷  Присоединиться по QR"</string>
 </resources>

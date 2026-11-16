@@ -49,6 +49,11 @@ object Prefs {
         get() = ecoFlow.value
         set(v) { ecoFlow.value = v; sp.edit().putBoolean("eco", v).apply() }
 
+    // Онбординг «Пригласите близких» уже показан
+    var onboardingShown: Boolean
+        get() = sp.getBoolean("onboarded", false)
+        set(v) { sp.edit().putBoolean("onboarded", v).apply() }
+
     fun init(context: Context) {
         if (::sp.isInitialized) return
         appContext = context.applicationContext
