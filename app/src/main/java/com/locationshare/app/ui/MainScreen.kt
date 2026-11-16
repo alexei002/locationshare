@@ -185,7 +185,7 @@ fun MainScreen() {
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(start = 14.dp),
                 ) {
-                    Text("Доступна версия v${u.tag}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Доступна версия ${u.version}", style = MaterialTheme.typography.bodyMedium)
                     TextButton(onClick = {
                         Updater.downloadAndInstall(ctx, u.url, u.tag); update = null
                     }) { Text("Установить") }
@@ -314,7 +314,7 @@ private fun SettingsScreen(onClose: () -> Unit) {
                             u == null -> "обновлений нет"
                             else -> {
                                 Updater.downloadAndInstall(ctx, u.url, u.tag)
-                                "скачивается v${u.tag}…"
+                                "скачивается ${u.version}…"
                             }
                         }
                     }

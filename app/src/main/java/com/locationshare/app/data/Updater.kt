@@ -23,7 +23,19 @@ import kotlinx.coroutines.withContext
  */
 object Updater {
 
-    data class Update(val tag: Int, val url: String)
+    data class Update(val tag: Int, val version: String, val url: String)
+
+    /** «2026.11.2» → 20261102; «4» → 4 (старый формат тегов) */
+    private fun tagCode(t: String): Int? = try {
+        if (t.contains('.')) {
+            val p = t.split('.').map { it.trim().toInt() }
+            if (p.size != 3) null else p[0] * 10000 + p[1] * 100 + p[2]
+        } else {
+            t.toInt()
+        }
+    } catch (e: Exception) {
+        null
+    }
 
     suspend fun check(): Update? = withContext(Dispatchers.IO) {
         val endpoint = BuildConfig.UPDATE_URL
@@ -35,8 +47,8 @@ object Updater {
             conn.setRequestProperty("Accept", "application/vnd.github+json")
             if (conn.responseCode != 200) return@withContext null
             val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
-            val tag = json.optString("tag_name").removePrefix("v").trim().toIntOrNull()
-                ?: return@withContext null
+            val tagRaw = json.optString("tag_name").removePrefix("v").trim()
+            val tag = tagCode(tagRaw) ?: return@withContext null
             if (tag <= BuildConfig.VERSION_CODE) return@withContext null
             val assets = json.optJSONArray("assets") ?: return@withContext null
             var url: String? = null
@@ -46,7 +58,7 @@ object Updater {
                     url = a.optString("browser_download_url"); break
                 }
             }
-            url?.let { Update(tag, it) }
+            url?.let { Update(tag, tagRaw, it) }
         } catch (e: Exception) {
             null
         }
