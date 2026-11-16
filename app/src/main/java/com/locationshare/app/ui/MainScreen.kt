@@ -51,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -75,8 +76,11 @@ import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
 import com.yandex.runtime.image.ImageProvider
 import com.yandex.mapkit.map.CameraPosition
+import com.yandex.mapkit.map.ClusterListener
+import com.yandex.mapkit.map.ClusterizedPlacemarkCollection
 import com.yandex.mapkit.map.IconStyle
 import com.yandex.mapkit.map.InputListener
+import com.yandex.mapkit.map.MapObjectTapListener
 import com.yandex.mapkit.map.PlacemarkMapObject
 import com.yandex.mapkit.mapview.MapView
 import java.lang.ref.WeakReference
@@ -98,6 +102,8 @@ fun MainScreen() {
     var update by remember { mutableStateOf<Updater.Update?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var adminId by remember { mutableStateOf<String?>(null) }
+    var fitTrigger by remember { mutableStateOf(0) }
+    var centerTrigger by remember { mutableStateOf(0) }
     val myId = Prefs.deviceId
 
     DisposableEffect(group) {
@@ -123,7 +129,8 @@ fun MainScreen() {
         val today = System.currentTimeMillis() / 86_400_000L
         if (Prefs.lastUpdateCheck != today) {
             Prefs.lastUpdateCheck = today
-            update = Updater.check()
+            val r = Updater.check()
+            if (r is Updater.CheckResult.Found) update = r.u
         }
     }
 
@@ -141,56 +148,11 @@ fun MainScreen() {
             devices = devices,
             onMarkerTap = { selectedId = it },
             onMapTap = { selectedId = null },
+            fitTrigger = fitTrigger,
+            centerTrigger = centerTrigger,
         )
 
-        // Карточка устройства: тап по маркеру
-        selected?.let { d ->
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(16.dp),
-                tonalElevation = 4.dp,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp).fillMaxWidth(0.9f),
-            ) {
-                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(14.dp)
-                                .background(androidx.compose.ui.graphics.Color(colorFor(d.id)), CircleShape)
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            d.name + if (d.id == myId) " (Вы)" else "",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        d.battery?.let { Text("$it%", style = MaterialTheme.typography.bodyMedium) }
-                        IconButton(onClick = { selectedId = null }, modifier = Modifier.size(32.dp)) {
-                            Icon(Icons.Filled.Close, contentDescription = "Закрыть", modifier = Modifier.size(18.dp))
-                        }
-                    }
-                    d.current?.let {
-                        Text(
-                            "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    if (d.id != myId) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-                            OutlinedButton(onClick = { ringTarget = d }) { Text("Прозвонить") }
-                            if (adminId == myId) {
-                                TextButton(onClick = {
-                                    Repo.removeDevice(group, d.id)
-                                    selectedId = null
-                                }) { Text("Удалить из группы", color = MaterialTheme.colorScheme.error) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Баннер обновления
+        // Баннер обновления сверху
         update?.let { u ->
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
@@ -210,46 +172,123 @@ fun MainScreen() {
             }
         }
 
-        // Компактная нижняя панель: чипы устройств + кнопка настроек
-        Surface(
-            tonalElevation = 3.dp,
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+        // Единый нижний столбец: карточка → кнопки → панель чипов (не перекрываются)
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            selected?.let { d ->
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 4.dp,
+                    modifier = Modifier.padding(bottom = 6.dp).fillMaxWidth(0.92f),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier
+                                    .size(14.dp)
+                                    .background(androidx.compose.ui.graphics.Color(colorFor(d.id)), CircleShape)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                d.name + if (d.id == myId) " (Вы)" else "",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            d.battery?.let { Text("$it%", style = MaterialTheme.typography.bodyMedium) }
+                            IconButton(onClick = { selectedId = null }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Close, contentDescription = "Закрыть", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        d.current?.let {
+                            Text(
+                                "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        if (d.id != myId) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(top = 6.dp),
+                            ) {
+                                OutlinedButton(onClick = { ringTarget = d }) { Text("Прозвонить") }
+                                if (adminId == myId) {
+                                    TextButton(onClick = {
+                                        Repo.removeDevice(group, d.id)
+                                        selectedId = null
+                                    }) { Text("Удалить из группы", color = MaterialTheme.colorScheme.error) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Кнопки карты: «Все» и «центрировать на мне»
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth().padding(end = 12.dp, bottom = 6.dp),
             ) {
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.weight(1f),
+                Surface(
+                    onClick = { fitTrigger++ },
+                    shape = CircleShape,
+                    tonalElevation = 3.dp,
+                    modifier = Modifier.size(44.dp),
                 ) {
-                    if (!sharing) {
-                        item {
-                            Text(
-                                "гео выключено",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
-                            )
-                        }
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("Все", fontSize = 12.sp)
                     }
-                    if (devices.isEmpty() && sharing) {
-                        item {
-                            Text(
-                                "ждём точки…",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
-                            )
-                        }
-                    }
-                    items(devices, key = { it.id }) { d -> DeviceChip(d) { selectedId = d.id; ringTarget = d } }
                 }
-                IconButton(onClick = { showSettings = true }) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Настройки")
+                Spacer(Modifier.width(10.dp))
+                FloatingActionButton(onClick = { centerTrigger++ }) {
+                    Icon(Icons.Filled.LocationOn, contentDescription = "Центрировать на мне")
+                }
+            }
+
+            // Компактная нижняя панель: чипы устройств + кнопка настроек
+            Surface(
+                tonalElevation = 3.dp,
+                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                ) {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        if (!sharing) {
+                            item {
+                                Text(
+                                    "гео выключено",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+                                )
+                            }
+                        }
+                        if (devices.isEmpty() && sharing) {
+                            item {
+                                Text(
+                                    "ждём точки…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
+                                )
+                            }
+                        }
+                        items(devices, key = { it.id }) { d -> DeviceChip(d) { selectedId = d.id; ringTarget = d } }
+                    }
+                    IconButton(onClick = { showSettings = true }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Настройки")
+                    }
                 }
             }
         }
@@ -413,20 +452,20 @@ private fun SettingsScreen(
             // Обновления
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 16.dp, bottom = 24.dp),
+                modifier = Modifier.padding(top = 16.dp),
             ) {
                 OutlinedButton(onClick = {
                     updState = "проверяю…"
                     scope.launch {
-                        val u = Updater.check()
-                        updState = when {
-                            u == null && com.locationshare.app.BuildConfig.UPDATE_URL.isBlank() ->
-                                "не настроено"
-                            u == null -> "обновлений нет"
-                            else -> {
-                                Updater.downloadAndInstall(ctx, u.url, u.tag)
-                                "скачивается ${u.version}…"
+                        val r = Updater.check()
+                        updState = when (r) {
+                            is Updater.CheckResult.Found -> {
+                                Updater.downloadAndInstall(ctx, r.u.url, r.u.tag)
+                                "скачивается ${r.u.version}…"
                             }
+                            Updater.CheckResult.UpToDate -> "у вас последняя версия"
+                            Updater.CheckResult.NotConfigured -> "не настроено"
+                            is Updater.CheckResult.Error -> "не удалось: ${r.msg}"
                         }
                     }
                 }) { Text("Проверить обновления") }
@@ -439,6 +478,26 @@ private fun SettingsScreen(
                     )
                 }
             }
+            TextButton(onClick = {
+                try {
+                    ctx.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://github.com/alexei002/locationshare/releases/latest"),
+                        )
+                    )
+                } catch (_: Exception) {
+                }
+            }) {
+                Text("Открыть страницу релиза в браузере", fontSize = 12.sp)
+            }
+
+            Text(
+                "Версия ${com.locationshare.app.BuildConfig.VERSION_NAME} (сборка ${com.locationshare.app.BuildConfig.VERSION_CODE})",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(bottom = 24.dp),
+            )
         }
     }
 
@@ -592,21 +651,60 @@ private fun pinBitmap(label: String, color: Int): Bitmap {
     return b
 }
 
+/** Кластер: синий кружок с количеством устройств */
+private fun clusterBitmap(count: Int): Bitmap {
+    val size = 128
+    val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val c = Canvas(b)
+    val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1E88E5.toInt() }
+    c.drawCircle(size / 2f, size / 2f, size / 2f - 6f, fill)
+    val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = 0xFFFFFFFF.toInt()
+        style = Paint.Style.STROKE
+        strokeWidth = 6f
+    }
+    c.drawCircle(size / 2f, size / 2f, size / 2f - 6f, border)
+    val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        this.color = 0xFFFFFFFF.toInt()
+        textSize = 58f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }
+    val y = size / 2f - (text.ascent() + text.descent()) / 2f
+    c.drawText(count.coerceAtMost(99).toString(), size / 2f, y, text)
+    return b
+}
+
 @Composable
 fun MapArea(
     devices: List<Repo.DeviceState>,
     onMarkerTap: (String) -> Unit,
     onMapTap: () -> Unit,
+    fitTrigger: Int = 0,
+    centerTrigger: Int = 0,
 ) {
     val myId = Prefs.deviceId
     var follow by remember { mutableStateOf(true) }
     var centered by remember { mutableStateOf(false) }
-    var fitAll by remember { mutableStateOf(false) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     val placemarks = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
-    val tapListeners = remember { mutableStateMapOf<String, com.yandex.mapkit.map.MapObjectTapListener>() }
+    val tapListeners = remember { mutableStateMapOf<String, MapObjectTapListener>() }
+    var clusterCollection by remember { mutableStateOf<ClusterizedPlacemarkCollection?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    // Держим сильную ссылку: MapKit принимает WeakReference
+    val devicesNow by rememberUpdatedState(devices)
+
+    // Кластеризация: близкие маркеры схлопываются в кружок с числом,
+    // тап по кластеру — стандартный зум ближе (встроенное поведение MapKit)
+    val clusterListener = remember {
+        ClusterListener { cluster ->
+            cluster.appearance.setIcon(
+                ImageProvider.fromBitmap(clusterBitmap(cluster.size)),
+                IconStyle().apply { scale = 0.6f },
+            )
+        }
+    }
+
+    // Держим сильные ссылки: MapKit принимает WeakReference
     val inputListener = remember {
         object : InputListener {
             override fun onMapTap(m: com.yandex.mapkit.map.Map, p: Point) {
@@ -640,6 +738,48 @@ fun MapArea(
         }
     }
 
+    // «Показать всех»
+    LaunchedEffect(fitTrigger) {
+        if (fitTrigger == 0) return@LaunchedEffect
+        val mv = mapView ?: return@LaunchedEffect
+        val pts = devicesNow.mapNotNull { it.current }
+        if (pts.isEmpty()) return@LaunchedEffect
+        follow = false
+        val minLat = pts.minOf { it.lat }; val maxLat = pts.maxOf { it.lat }
+        val minLon = pts.minOf { it.lon }; val maxLon = pts.maxOf { it.lon }
+        val center = Point((minLat + maxLat) / 2, (minLon + maxLon) / 2)
+        val latSpan = (maxLat - minLat).coerceAtLeast(0.003)
+        val lonSpan = (maxLon - minLon).coerceAtLeast(0.003)
+        val wPx = kotlin.math.max(mv.width, 256)
+        val hPx = kotlin.math.max(mv.height, 256)
+        val zLat = ln(360.0 / latSpan * (hPx * 0.8 / 256.0)) / ln(2.0)
+        val zLon = ln(360.0 / lonSpan * (wPx * 0.8 / 256.0)) / ln(2.0)
+        val zoom = min(zLat, zLon).coerceIn(3.0, 18.0).toFloat()
+        mv.map.move(
+            CameraPosition(center, zoom, 0f, 0f),
+            Animation(Animation.Type.SMOOTH, 0.6f),
+            null,
+        )
+    }
+
+    // «Центрировать на мне»
+    LaunchedEffect(centerTrigger) {
+        if (centerTrigger == 0) return@LaunchedEffect
+        val mv = mapView ?: return@LaunchedEffect
+        val mePoint: Point? = devicesNow.firstOrNull { it.id == myId }?.current
+            ?.let { Point(it.lat, it.lon) }
+            ?: LocationService.lastLocation?.let { Point(it.latitude, it.longitude) }
+        if (mePoint != null) {
+            follow = true
+            centered = true
+            mv.map.move(
+                CameraPosition(mePoint, mv.map.cameraPosition.zoom.coerceAtLeast(14f), 0f, 0f),
+                Animation(Animation.Type.SMOOTH, 0.5f),
+                null,
+            )
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -651,13 +791,17 @@ fun MapArea(
             },
             update = { mv ->
                 mapView = mv
-                val objs = mv.map.mapObjects
+                if (clusterCollection == null) {
+                    clusterCollection = mv.map.mapObjects
+                        .addClusterizedPlacemarkCollection(WeakReference(clusterListener))
+                }
+                val objs = clusterCollection ?: return@AndroidView
                 val seen = HashSet<String>()
                 for (d in devices) {
                     seen.add(d.id)
                     val color = colorFor(d.id)
                     if (!tapListeners.contains(d.id)) {
-                        tapListeners[d.id] = com.yandex.mapkit.map.MapObjectTapListener { _, _ ->
+                        tapListeners[d.id] = MapObjectTapListener { _, _ ->
                             onMarkerTap(d.id); true
                         }
                     }
@@ -678,28 +822,7 @@ fun MapArea(
                 }
 
                 val me = devices.firstOrNull { it.id == myId && it.current != null }?.current
-                if (fitAll) {
-                    val pts = devices.mapNotNull { it.current }
-                    if (pts.isNotEmpty()) {
-                        fitAll = false
-                        follow = false
-                        val minLat = pts.minOf { it.lat }; val maxLat = pts.maxOf { it.lat }
-                        val minLon = pts.minOf { it.lon }; val maxLon = pts.maxOf { it.lon }
-                        val center = Point((minLat + maxLat) / 2, (minLon + maxLon) / 2)
-                        val latSpan = (maxLat - minLat).coerceAtLeast(0.003)
-                        val lonSpan = (maxLon - minLon).coerceAtLeast(0.003)
-                        val wPx = kotlin.math.max(mv.width, 256)
-                        val hPx = kotlin.math.max(mv.height, 256)
-                        val zLat = ln(360.0 / latSpan * (hPx * 0.8 / 256.0)) / ln(2.0)
-                        val zLon = ln(360.0 / lonSpan * (wPx * 0.8 / 256.0)) / ln(2.0)
-                        val zoom = min(zLat, zLon).coerceIn(3.0, 18.0).toFloat()
-                        mv.map.move(
-                            CameraPosition(center, zoom, 0f, 0f),
-                            Animation(Animation.Type.SMOOTH, 0.6f),
-                            null,
-                        )
-                    }
-                } else if (!centered) {
+                if (!centered) {
                     val first = me ?: devices.firstOrNull { it.current != null }?.current
                     if (first != null) {
                         centered = true
@@ -714,29 +837,6 @@ fun MapArea(
                 }
             },
         )
-        FloatingActionButton(
-            onClick = { centered = false; follow = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 76.dp),
-        ) {
-            Icon(Icons.Filled.LocationOn, contentDescription = "Центрировать на мне")
-        }
-
-        // «Показать всех»: камера по всем устройствам группы
-        Surface(
-            onClick = { fitAll = true },
-            shape = CircleShape,
-            tonalElevation = 3.dp,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 12.dp, bottom = 140.dp)
-                .size(44.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("Все", fontSize = 12.sp)
-            }
-        }
     }
 }
 

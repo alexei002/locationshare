@@ -25,6 +25,13 @@ object Updater {
 
     data class Update(val tag: Int, val version: String, val url: String)
 
+    sealed class CheckResult {
+        data class Found(val u: Update) : CheckResult()
+        object UpToDate : CheckResult()
+        object NotConfigured : CheckResult()
+        data class Error(val msg: String) : CheckResult()
+    }
+
     /** «2026.11.2» → 20261102; «4» → 4 (старый формат тегов) */
     private fun tagCode(t: String): Int? = try {
         if (t.contains('.')) {
@@ -37,20 +44,23 @@ object Updater {
         null
     }
 
-    suspend fun check(): Update? = withContext(Dispatchers.IO) {
+    suspend fun check(): CheckResult = withContext(Dispatchers.IO) {
         val endpoint = BuildConfig.UPDATE_URL
-        if (endpoint.isBlank()) return@withContext null
+        if (endpoint.isBlank()) return@withContext CheckResult.NotConfigured
         try {
             val conn = URL(endpoint).openConnection() as HttpURLConnection
             conn.connectTimeout = 10_000
             conn.readTimeout = 10_000
             conn.setRequestProperty("Accept", "application/vnd.github+json")
-            if (conn.responseCode != 200) return@withContext null
+            if (conn.responseCode != 200) {
+                return@withContext CheckResult.Error("HTTP ${conn.responseCode}")
+            }
             val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
             val tagRaw = json.optString("tag_name").removePrefix("v").trim()
-            val tag = tagCode(tagRaw) ?: return@withContext null
-            if (tag <= BuildConfig.VERSION_CODE) return@withContext null
-            val assets = json.optJSONArray("assets") ?: return@withContext null
+            val tag = tagCode(tagRaw) ?: return@withContext CheckResult.Error("тег релиза не распознан: $tagRaw")
+            if (tag <= BuildConfig.VERSION_CODE) return@withContext CheckResult.UpToDate
+            val assets = json.optJSONArray("assets")
+                ?: return@withContext CheckResult.Error("в релизе нет файлов")
             var url: String? = null
             for (i in 0 until assets.length()) {
                 val a = assets.optJSONObject(i) ?: continue
@@ -58,9 +68,10 @@ object Updater {
                     url = a.optString("browser_download_url"); break
                 }
             }
-            url?.let { Update(tag, tagRaw, it) }
+            url?.let { CheckResult.Found(Update(tag, tagRaw, it)) }
+                ?: CheckResult.Error("APK в релизе не найден")
         } catch (e: Exception) {
-            null
+            CheckResult.Error("сеть: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
