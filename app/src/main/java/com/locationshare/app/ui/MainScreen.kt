@@ -109,6 +109,7 @@ import java.lang.ref.WeakReference
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.min
+import kotlin.math.tan
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -1042,12 +1043,17 @@ fun MapArea(
         val minLat = pts.minOf { it.lat }; val maxLat = pts.maxOf { it.lat }
         val minLon = pts.minOf { it.lon }; val maxLon = pts.maxOf { it.lon }
         val center = Point((minLat + maxLat) / 2, (minLon + maxLon) / 2)
-        val latSpan = (maxLat - minLat).coerceAtLeast(0.003)
-        val lonSpan = (maxLon - minLon).coerceAtLeast(0.003)
+        // Спаны в проекции Меркатора (рад): без поправки на широте ~55° горизонталь
+        // растянута в ~1,7 раза — крайние пользователи не влезали в экран
+        fun mercY(lat: Double): Double =
+            ln(tan(Math.PI / 4 + Math.toRadians(lat.coerceIn(-85.0, 85.0)) / 2))
+        val spanY = (mercY(maxLat) - mercY(minLat)).coerceAtLeast(5e-5)
+        val spanX = Math.toRadians(maxLon - minLon).coerceAtLeast(5e-5)
         val wPx = kotlin.math.max(mv.width, 256)
         val hPx = kotlin.math.max(mv.height, 256)
-        val zLat = ln(360.0 / latSpan * (hPx * 0.8 / 256.0)) / ln(2.0)
-        val zLon = ln(360.0 / lonSpan * (wPx * 0.8 / 256.0)) / ln(2.0)
+        // 0.7 — поле ~15% с каждой стороны, чтобы метки не прижимались к краю
+        val zLat = ln(2 * Math.PI / spanY * (hPx * 0.7 / 256.0)) / ln(2.0)
+        val zLon = ln(2 * Math.PI / spanX * (wPx * 0.7 / 256.0)) / ln(2.0)
         val zoom = min(zLat, zLon).coerceIn(3.0, 18.0).toFloat()
         mv.map.move(
             CameraPosition(center, zoom, 0f, 0f),
