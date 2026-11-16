@@ -13,7 +13,7 @@ object Repo {
     private const val TRACK_MAX = 200
 
     // База создана в регионе europe-west1 — нужен явный URL, иначе SDK идёт в us-central1
-    private const val DB_URL =
+    internal const val DB_URL =
         "https://locationshare-e897f-default-rtdb.europe-west1.firebasedatabase.app"
 
     val db: FirebaseDatabase by lazy { FirebaseDatabase.getInstance(DB_URL) }

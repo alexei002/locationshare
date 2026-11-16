@@ -9,6 +9,7 @@ import com.yandex.mapkit.MapKitFactory
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
+        CrashReporter.install(this)
         Prefs.init(this)
         MapKitFactory.setApiKey(BuildConfig.MAPKIT_KEY)
         MapKitFactory.initialize(this)
@@ -16,5 +17,6 @@ class App : Application() {
             Repo.db.setPersistenceEnabled(true)
         } catch (_: Exception) {
         }
+        Thread { CrashReporter.sendPending(this) }.start()
     }
 }
