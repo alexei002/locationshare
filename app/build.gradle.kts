@@ -20,9 +20,9 @@ android {
         applicationId = "com.locationshare.app"
         minSdk = 26
         targetSdk = 35
-        // Схема версий: год.минор.патч (2026.11.14). versionCode = ГГГГММ*100+патч
-        versionCode = 20261114
-        versionName = "2026.11.14"
+        // Схема версий: год.минор.патч (2026.11.15). versionCode = ГГГГММ*100+патч
+        versionCode = 20261115
+        versionName = "2026.11.15"
         buildConfigField("String", "MAPKIT_KEY", "\"${localProps.getProperty("MAPKIT_KEY", "")}\"")
         buildConfigField("String", "UPDATE_URL", "\"${localProps.getProperty("UPDATE_URL", "")}\"")
         ndk {
