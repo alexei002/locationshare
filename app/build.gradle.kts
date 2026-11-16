@@ -20,9 +20,9 @@ android {
         applicationId = "com.locationshare.app"
         minSdk = 26
         targetSdk = 35
-        // Схема версий: год.минор.патч (2026.11.7). versionCode = ГГГГММ*100+патч
-        versionCode = 20261107
-        versionName = "2026.11.7"
+        // Схема версий: год.минор.патч (2026.11.8). versionCode = ГГГГММ*100+патч
+        versionCode = 20261108
+        versionName = "2026.11.8"
         buildConfigField("String", "MAPKIT_KEY", "\"${localProps.getProperty("MAPKIT_KEY", "")}\"")
         buildConfigField("String", "UPDATE_URL", "\"${localProps.getProperty("UPDATE_URL", "")}\"")
         ndk {
@@ -79,4 +79,6 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+
+    testImplementation("junit:junit:4.13.2")
 }

@@ -76,15 +76,12 @@ import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
 import com.yandex.runtime.image.ImageProvider
 import com.yandex.mapkit.map.CameraPosition
-import com.yandex.mapkit.map.ClusterListener
-import com.yandex.mapkit.map.ClusterizedPlacemarkCollection
 import com.yandex.mapkit.map.IconStyle
 import com.yandex.mapkit.map.InputListener
 import com.yandex.mapkit.map.MapObjectTapListener
 import com.yandex.mapkit.map.PlacemarkMapObject
 import com.yandex.mapkit.mapview.MapView
 import java.lang.ref.WeakReference
-import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.min
 import kotlinx.coroutines.launch
@@ -609,24 +606,7 @@ private fun BatteryDialog(onDismiss: () -> Unit) {
 }
 
 // ---------- Карта ----------
-
-private val PALETTE = intArrayOf(
-    0xFFE53935.toInt(), 0xFF1E88E5.toInt(), 0xFF43A047.toInt(), 0xFFFB8C00.toInt(),
-    0xFF8E24AA.toInt(), 0xFF00ACC1.toInt(), 0xFFF4511E.toInt(), 0xFF3949AB.toInt(),
-)
-
-internal fun colorFor(id: String): Int = PALETTE[abs(id.hashCode()) % PALETTE.size]
-
-internal fun timeAgo(ts: Long): String {
-    if (ts <= 0) return "—"
-    val d = System.currentTimeMillis() - ts
-    return when {
-        d < 60_000 -> "только что"
-        d < 3_600_000 -> "${d / 60_000} мин"
-        d < 86_400_000 -> "${d / 3_600_000} ч"
-        else -> "давно"
-    }
-}
+// colorFor/timeAgo/PALETTE вынесены в Format.kt (тот же пакет)
 
 private fun pinBitmap(label: String, color: Int): Bitmap {
     val size = 128
@@ -688,21 +668,11 @@ fun MapArea(
     var centered by remember { mutableStateOf(false) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     val placemarks = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
+    // Схлопнутые группы: ключ «grp:<id первого>» → общий кружок с числом
+    val groupPins = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
     val tapListeners = remember { mutableStateMapOf<String, MapObjectTapListener>() }
-    var clusterCollection by remember { mutableStateOf<ClusterizedPlacemarkCollection?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val devicesNow by rememberUpdatedState(devices)
-
-    // Кластеризация: близкие маркеры схлопываются в кружок с числом,
-    // тап по кластеру — стандартный зум ближе (встроенное поведение MapKit)
-    val clusterListener = remember {
-        ClusterListener { cluster ->
-            cluster.appearance.setIcon(
-                ImageProvider.fromBitmap(clusterBitmap(cluster.size)),
-                IconStyle().apply { scale = 0.6f },
-            )
-        }
-    }
 
     // Держим сильные ссылки: MapKit принимает WeakReference
     val inputListener = remember {
@@ -791,11 +761,7 @@ fun MapArea(
             },
             update = { mv ->
                 mapView = mv
-                if (clusterCollection == null) {
-                    clusterCollection = mv.map.mapObjects
-                        .addClusterizedPlacemarkCollection(WeakReference(clusterListener))
-                }
-                val objs = clusterCollection ?: return@AndroidView
+                val objs = mv.map.mapObjects
                 val seen = HashSet<String>()
                 for (d in devices) {
                     seen.add(d.id)
@@ -821,8 +787,66 @@ fun MapArea(
                     tapListeners.remove(k)
                 }
 
-                // Кластеризация запускается явно: (радиус в единицах масштаба, мин. размер кластера)
-                objs.clusterPlacemarks(60.0, 2)
+                // --- Ручное схлопывание близких маркеров ---
+                // Встроенная кластеризация MapKit не сработала на слипшихся точках,
+                // поэтому сами считаем экранную близость (<48 px) и рисуем общий кружок с числом.
+                val withPoints = devices.filter { it.current != null }
+                val screenPos = HashMap<String, Pair<Float, Float>>()
+                for (d in withPoints) {
+                    val sp = mv.mapWindow.worldToScreen(Point(d.current!!.lat, d.current!!.lon))
+                    if (sp != null) screenPos[d.id] = Pair(sp.x, sp.y)
+                }
+                val assigned = HashSet<String>()
+                val groups = mutableListOf<List<Repo.DeviceState>>()
+                val sorted = withPoints.sortedByDescending { it.current?.ts ?: 0L }
+                for (d in sorted) {
+                    if (d.id in assigned || d.id !in screenPos) continue
+                    val (sx, sy) = screenPos[d.id]!!
+                    val grp = mutableListOf(d)
+                    assigned.add(d.id)
+                    for (other in sorted) {
+                        if (other.id in assigned || other.id !in screenPos) continue
+                        val (ox, oy) = screenPos[other.id]!!
+                        val dx = ox - sx; val dy = oy - sy
+                        if (dx * dx + dy * dy < 48f * 48f) {
+                            grp.add(other)
+                            assigned.add(other.id)
+                        }
+                    }
+                    if (grp.size > 1) groups.add(grp)
+                }
+
+                val groupedIds = groups.flatten().map { it.id }.toHashSet()
+                // одиночные — видимы, в группе — скрыты
+                for (d in withPoints) {
+                    placemarks[d.id]?.setVisible(d.id !in groupedIds)
+                }
+                // общие кружки
+                val groupKeys = HashSet<String>()
+                for (g in groups) {
+                    val head = g.first() // самый «свежий» в группе
+                    val key = "grp:${head.id}"
+                    groupKeys.add(key)
+                    if (!tapListeners.contains(key)) {
+                        tapListeners[key] = MapObjectTapListener { _, _ ->
+                            onMarkerTap(head.id); true
+                        }
+                    }
+                    val gp = groupPins.getOrPut(key) {
+                        objs.addPlacemark().apply {
+                            setIcon(
+                                ImageProvider.fromBitmap(clusterBitmap(g.size)),
+                                IconStyle().apply { scale = 0.6f },
+                            )
+                            addTapListener(WeakReference(tapListeners[key]))
+                        }
+                    }
+                    gp.geometry = Point(head.current!!.lat, head.current!!.lon)
+                }
+                for (k in groupPins.keys - groupKeys) {
+                    groupPins.remove(k)?.let { objs.remove(it) }
+                    tapListeners.remove(k)
+                }
 
                 val me = devices.firstOrNull { it.id == myId && it.current != null }?.current
                 if (!centered) {

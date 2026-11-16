@@ -33,7 +33,7 @@ object Updater {
     }
 
     /** «2026.11.2» → 20261102; «4» → 4 (старый формат тегов) */
-    private fun tagCode(t: String): Int? = try {
+    internal fun tagCode(t: String): Int? = try {
         if (t.contains('.')) {
             val p = t.split('.').map { it.trim().toInt() }
             if (p.size != 3) null else p[0] * 10000 + p[1] * 100 + p[2]
