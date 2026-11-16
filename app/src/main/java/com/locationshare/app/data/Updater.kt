@@ -75,7 +75,22 @@ object Updater {
         }
     }
 
+    /**
+     * Удаляет скачанные APK-обновления: после установки новой версии
+     * (ACTION_MY_PACKAGE_REPLACED) и перед каждой новой загрузкой.
+     */
+    fun cleanupDownloaded(ctx: Context) {
+        try {
+            val dir = ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
+            dir.listFiles()
+                ?.filter { it.name.startsWith("locationshare-v") && it.name.endsWith(".apk") }
+                ?.forEach { it.delete() }
+        } catch (_: Exception) {
+        }
+    }
+
     fun downloadAndInstall(ctx: Context, url: String, tag: Int) {
+        cleanupDownloaded(ctx) // старые APK не должны копиться
         val dm = ctx.getSystemService(DownloadManager::class.java)
         val name = "locationshare-v$tag.apk"
         val req = DownloadManager.Request(Uri.parse(url))
