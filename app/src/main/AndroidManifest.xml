@@ -53,5 +53,12 @@
         <receiver
             android:name=".service.RingStopReceiver"
             android:exported="false" />
+
+        <!-- Watchdog на AlarmManager: будит процесс, если систему убила сервис.
+             Аларм идёт явным интентом, intent-filter не нужен; без декларации
+             ресивер не сработал бы после смерти процесса. -->
+        <receiver
+            android:name=".service.WatchdogReceiver"
+            android:exported="false" />
     </application>
 </manifest>

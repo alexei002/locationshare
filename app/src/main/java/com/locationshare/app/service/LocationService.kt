@@ -1,5 +1,6 @@
 package com.locationshare.app.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -54,6 +55,9 @@ class LocationService : Service() {
         @Volatile var mapVisible = false
         @Volatile var lastLocation: Location? = null
 
+        // Время последней публикации точки (мс): по нему watchdog решает, что сервис замолчал
+        @Volatile var lastPublishMs = 0L
+
         fun intent(ctx: Context, action: String): Intent =
             Intent(ctx, LocationService::class.java).setAction(action)
 
@@ -94,6 +98,7 @@ class LocationService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 unregister()
+                WatchdogReceiver.cancel(this) // пользователь сам выключил — watchdog не нужен
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return START_NOT_STICKY
@@ -118,6 +123,9 @@ class LocationService : Service() {
         }
 
         registerLocation()
+        // Страховка: сервис могли поднять BootReceiver'ом или watchdog-алармом, без открытого
+        // UI — перепланируем цепочку (тот же PendingIntent, дублей алармов не будет)
+        WatchdogReceiver.schedule(this)
         return START_STICKY
     }
 
@@ -165,6 +173,7 @@ class LocationService : Service() {
         if (moved >= 25 || now - lastPublishTs >= HEARTBEAT_MS) {
             lastPublished = loc
             lastPublishTs = now
+            lastPublishMs = now // публикация прошла — watchdog видит, что сервис жив
             Repo.publishCurrent(code, Prefs.deviceId, Prefs.deviceName, loc, batteryPct())
         }
     }
@@ -177,6 +186,7 @@ class LocationService : Service() {
                 val loc = lastLocation ?: continue
                 val code = Prefs.groupCode ?: continue
                 Repo.publishCurrent(code, Prefs.deviceId, Prefs.deviceName, loc, batteryPct())
+                lastPublishMs = System.currentTimeMillis() // heartbeat публикует — отмечаем для watchdog
             }
         }
     }
@@ -193,6 +203,28 @@ class LocationService : Service() {
         running = false
         scope.cancel()
         super.onDestroy()
+    }
+
+    // Свайп из недавних: MIUI убивает процесс — перезапускаем сервис через полторы секунды
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (Prefs.sharing && !Prefs.eco) {
+            // Цепочка watchdog-алармов — она поднимет сервис, но не раньше чем через 10 мин
+            WatchdogReceiver.schedule(this)
+            try {
+                // Немедленный перезапуск-страховка: отдельный PendingIntent на сервис.
+                // getForegroundService, а не getService: после свайпа приложение в фоне,
+                // обычный startService из аларма не разрешён
+                val pi = PendingIntent.getForegroundService(
+                    this, TASK_RESTART_RC, intent(this, ACTION_START),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                // set() без wakeup достаточен: процесс только что жив; RTC — по абсолютному времени
+                am.set(AlarmManager.RTC, System.currentTimeMillis() + 1500, pi)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun batteryPct(): Int? = try {
@@ -232,3 +264,4 @@ class LocationService : Service() {
 private const val NOTIF_ID = 1
 private const val CHANNEL_ID = "loc"
 private const val HEARTBEAT_MS = 3 * 60_000L
+private const val TASK_RESTART_RC = 2 // request code аларма перезапуска после свайпа (0 и 1 заняты нотификацией)

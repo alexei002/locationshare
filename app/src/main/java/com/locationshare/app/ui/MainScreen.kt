@@ -69,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -88,6 +89,7 @@ import com.locationshare.app.data.Updater
 import com.locationshare.app.service.EcoWorker
 import com.locationshare.app.service.LocationService
 import com.locationshare.app.service.RingPlayer
+import com.locationshare.app.service.WatchdogReceiver
 import com.yandex.mapkit.Animation
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
@@ -171,6 +173,9 @@ fun MainScreen() {
     LaunchedEffect(sharing, eco) {
         if (sharing && !eco) LocationService.start(ctx)
         else LocationService.stop(ctx)
+        // Watchdog-аларм: точка не реже чем раз в 10 мин, даже если систему убила сервис
+        if (sharing && !eco) WatchdogReceiver.schedule(ctx)
+        else WatchdogReceiver.cancel(ctx)
         if (sharing && eco) EcoWorker.schedule(ctx)
         else EcoWorker.cancel(ctx)
     }
@@ -253,6 +258,9 @@ fun MainScreen() {
                                         Text(
                                             "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
                                             style = MaterialTheme.typography.bodySmall,
+                                            // Молчит дольше 10 мин — красным: устройство устарело
+                                            color = if (System.currentTimeMillis() - it.ts > WatchdogReceiver.INTERVAL_MS) MaterialTheme.colorScheme.error
+                                            else Color.Unspecified,
                                         )
                                     }
                                 }
@@ -311,6 +319,9 @@ fun MainScreen() {
                         Text(
                             "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
                             style = MaterialTheme.typography.bodySmall,
+                            // Молчит дольше 10 мин — красным: устройство устарело
+                            color = if (System.currentTimeMillis() - it.ts > WatchdogReceiver.INTERVAL_MS) MaterialTheme.colorScheme.error
+                            else Color.Unspecified,
                         )
                     }
                     if (d.id != myId) {
@@ -825,11 +836,12 @@ private fun DeviceChip(d: Repo.DeviceState, color: Int, tick: Int, onClick: () -
             Spacer(Modifier.width(6.dp))
             Text(if (me) "Вы" else d.name, style = MaterialTheme.typography.bodySmall)
             d.current?.let {
-                tick // тикер: пересчитать «N мин»
+                tick // тикер: пересчитать «N мин» (и цвет устаревания)
                 Text(
                     "  ${timeAgo(it.ts)}",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
+                    color = if (System.currentTimeMillis() - it.ts > WatchdogReceiver.INTERVAL_MS) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.outline,
                 )
             }
             d.battery?.let {
