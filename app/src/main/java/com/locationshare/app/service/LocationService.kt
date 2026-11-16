@@ -57,7 +57,16 @@ class LocationService : Service() {
         fun intent(ctx: Context, action: String): Intent =
             Intent(ctx, LocationService::class.java).setAction(action)
 
+        fun hasPermission(ctx: Context): Boolean =
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                ctx, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                androidx.core.content.ContextCompat.checkSelfPermission(
+                    ctx, android.Manifest.permission.ACCESS_COARSE_LOCATION
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
         fun start(ctx: Context) {
+            if (!hasPermission(ctx)) return // без разрешения location-FGS не стартует (краш на Android 14+)
             ContextCompat.startForegroundService(ctx, intent(ctx, ACTION_START))
         }
 
@@ -91,6 +100,12 @@ class LocationService : Service() {
             }
             ACTION_MAP_HIDDEN -> mapVisible = false
             else -> mapVisible = true // START и MAP_VISIBLE: карта открыта
+        }
+
+        // Нет разрешения геолокации — location-FGS запускать нельзя (SecurityException на 14+)
+        if (!hasPermission(this)) {
+            stopSelf()
+            return START_NOT_STICKY
         }
 
         startAsForeground()

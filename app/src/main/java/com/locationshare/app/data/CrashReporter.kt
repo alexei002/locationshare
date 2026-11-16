@@ -10,25 +10,55 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Сбор краш-логов: любое необработанное исключение пишется в файл и
- * синхронно уходит в Firebase RTDB (узел /crashes) — читается с ПК без USB.
- * Если сети в момент падения не было, файл отправится при следующем старте.
+ * Сбор краш-логов:
+ *  - Java-краши: uncaught handler → файл + синхронный POST в Firebase (/crashes)
+ *  - Нативные краши/убийства процесса: «след» шагов инициализации (mark) пишется
+ *    в файл; если прошлый запуск не дошёл до CLEAN_MARK — при следующем старте
+ *    след отправляется синхронно, до любой рискованной инициализации
+ *  - Офлайн-запас: неотправленные файлы уходят при следующем запуске
  */
 object CrashReporter {
     private const val MAX_CHARS = 14_000
+    private const val CLEAN_MARK = "app:ok"
+    private lateinit var stageFile: File
+
+    @Volatile
+    private var lastMark = ""
 
     fun install(appCtx: Context) {
+        stageFile = File(appCtx.filesDir, "last_run_stages.txt")
+
+        // Прошлый запуск закончился нечисто? Шлём его след прямо сейчас,
+        // пока процесс жив (нативные краши иначе вообще невидимы).
+        try {
+            val prev = if (stageFile.exists()) stageFile.readText() else ""
+            if (prev.isNotBlank() && !prev.trimEnd().endsWith(CLEAN_MARK)) {
+                post("DIRTY RUN (краш или убийство процесса)\n$prev")
+            }
+            stageFile.delete()
+        } catch (_: Exception) {
+        }
+        mark("app:create")
+
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                val text = buildLog(thread, throwable)
-                File(appCtx.filesDir, "crashes").apply { mkdirs() }
-                    .resolve("crash-${System.currentTimeMillis()}.txt")
-                    .writeText(text)
-                post(text) // сеть есть — уходит сразу
+                val text = buildLog(thread, throwable) + "\nlast stage: " + lastMark
+                val dir = File(appCtx.filesDir, "crashes").apply { mkdirs() }
+                File(dir, "crash-${System.currentTimeMillis()}.txt").writeText(text)
+                post(text)
             } catch (_: Exception) {
             }
             defaultHandler?.uncaughtException(thread, throwable)
+        }
+    }
+
+    /** Отметка пройденного шага инициализации */
+    fun mark(stage: String) {
+        lastMark = stage
+        try {
+            stageFile.appendText(stage + "\n")
+        } catch (_: Exception) {
         }
     }
 
@@ -38,8 +68,7 @@ object CrashReporter {
             val dir = File(appCtx.filesDir, "crashes")
             val files = dir.listFiles()?.sortedBy { it.name } ?: return
             for (f in files.take(5)) {
-                val text = f.readText()
-                if (post(text)) f.delete() else break
+                if (post(f.readText())) f.delete() else break
             }
         } catch (_: Exception) {
         }
