@@ -56,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,9 +76,10 @@ import com.yandex.mapkit.geometry.Point
 import com.yandex.runtime.image.ImageProvider
 import com.yandex.mapkit.map.CameraPosition
 import com.yandex.mapkit.map.IconStyle
-import com.yandex.mapkit.map.MapInputListener
+import com.yandex.mapkit.map.InputListener
 import com.yandex.mapkit.map.PlacemarkMapObject
 import com.yandex.mapkit.mapview.MapView
+import java.lang.ref.WeakReference
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.min
@@ -602,7 +604,18 @@ fun MapArea(
     var fitAll by remember { mutableStateOf(false) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     val placemarks = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
+    val tapListeners = remember { mutableStateMapOf<String, com.yandex.mapkit.map.MapObjectTapListener>() }
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Держим сильную ссылку: MapKit принимает WeakReference
+    val inputListener = remember {
+        object : InputListener {
+            override fun onMapTap(m: com.yandex.mapkit.map.Map, p: Point) {
+                onMapTap()
+            }
+
+            override fun onMapLongTap(m: com.yandex.mapkit.map.Map, p: Point) {}
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -633,13 +646,7 @@ fun MapArea(
             factory = { ctx ->
                 MapView(ctx).apply {
                     map.isRotateGesturesEnabled = false
-                    map.addInputListener(object : MapInputListener {
-                        override fun onTap(m: com.yandex.mapkit.map.Map, p: Point) {
-                            onMapTap()
-                        }
-
-                        override fun onLongTap(m: com.yandex.mapkit.map.Map, p: Point) {}
-                    })
+                    map.addInputListener(WeakReference(inputListener))
                 }
             },
             update = { mv ->
@@ -649,18 +656,26 @@ fun MapArea(
                 for (d in devices) {
                     seen.add(d.id)
                     val color = colorFor(d.id)
+                    if (!tapListeners.contains(d.id)) {
+                        tapListeners[d.id] = com.yandex.mapkit.map.MapObjectTapListener { _, _ ->
+                            onMarkerTap(d.id); true
+                        }
+                    }
                     val pl = placemarks.getOrPut(d.id) {
                         objs.addPlacemark().apply {
                             setIcon(
                                 ImageProvider.fromBitmap(pinBitmap(labelFor(d, myId), color)),
                                 IconStyle().apply { scale = 0.55f },
                             )
-                            addTapListener { _, _ -> onMarkerTap(d.id); true }
+                            addTapListener(WeakReference(tapListeners[d.id]))
                         }
                     }
                     d.current?.let { pl.geometry = Point(it.lat, it.lon) }
                 }
-                for (k in placemarks.keys - seen) placemarks.remove(k)?.let { objs.remove(it) }
+                for (k in placemarks.keys - seen) {
+                    placemarks.remove(k)?.let { objs.remove(it) }
+                    tapListeners.remove(k)
+                }
 
                 val me = devices.firstOrNull { it.id == myId && it.current != null }?.current
                 if (fitAll) {
