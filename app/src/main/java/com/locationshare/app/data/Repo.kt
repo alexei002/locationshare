@@ -5,12 +5,13 @@ import android.util.Log
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.MutableData
 import com.google.firebase.database.ServerValue
+import com.google.firebase.database.Transaction
 import com.google.firebase.database.ValueEventListener
 
 object Repo {
     private const val TAG = "Repo"
-    private const val TRACK_MAX = 200
 
     // База создана в регионе europe-west1 — нужен явный URL, иначе SDK идёт в us-central1
     internal const val DB_URL =
@@ -26,13 +27,13 @@ object Repo {
         val current: Pt?,
         val accuracy: Float,
         val battery: Int?,
-        val track: List<Pt>,
     ) {
         val online: Boolean
             get() = current != null && System.currentTimeMillis() - current.ts < 15 * 60_000
     }
 
-    private fun devicesRef(code: String) = db.getReference("groups").child(code).child("devices")
+    private fun groupRef(code: String) = db.getReference("groups").child(code)
+    private fun devicesRef(code: String) = groupRef(code).child("devices")
 
     fun publishCurrent(code: String, id: String, name: String, loc: Location, battery: Int?) {
         devicesRef(code).child(id).child("current")
@@ -46,23 +47,6 @@ object Repo {
                     "ts" to ServerValue.TIMESTAMP,
                 )
             )
-    }
-
-    fun addTrackPoint(code: String, id: String, loc: Location) {
-        val track = devicesRef(code).child(id).child("track")
-        track.push().setValue(
-            mapOf("lat" to loc.latitude, "lon" to loc.longitude, "ts" to ServerValue.TIMESTAMP)
-        )
-        // подрезаем хвост, чтобы Firebase не разрастался
-        track.orderByKey().limitToLast(TRACK_MAX + 60)
-            .addListenerForSingleValueEvent(object : ValueEventListener {
-                override fun onDataChange(s: DataSnapshot) {
-                    val extra = s.childrenCount - TRACK_MAX
-                    if (extra > 0) s.children.take(extra.toInt()).forEach { it.ref.removeValue() }
-                }
-
-                override fun onCancelled(e: DatabaseError) {}
-            })
     }
 
     fun observe(code: String, onUpdate: (List<DeviceState>) -> Unit): ValueEventListener {
@@ -83,11 +67,6 @@ object Repo {
                         continue
                     }
 
-                    val track = dev.child("track").children.mapNotNull { p ->
-                        val la = p.child("lat").getValue(Double::class.java) ?: return@mapNotNull null
-                        val lo = p.child("lon").getValue(Double::class.java) ?: return@mapNotNull null
-                        Pt(la, lo, p.child("ts").getValue(Long::class.java) ?: 0L)
-                    }
                     list.add(
                         DeviceState(
                             id = id,
@@ -95,7 +74,6 @@ object Repo {
                             current = Pt(lat, lon, ts),
                             accuracy = (cur.child("acc").getValue(Double::class.java) ?: 50.0).toFloat(),
                             battery = cur.child("bat").getValue(Int::class.java),
-                            track = track,
                         )
                     )
                 }
@@ -112,6 +90,41 @@ object Repo {
 
     fun stop(code: String, listener: ValueEventListener) {
         devicesRef(code).removeEventListener(listener)
+    }
+
+    // ---------- Администрирование ----------
+
+    /** Заявка на администратора: занимает место, только если оно свободно */
+    fun claimAdmin(code: String, id: String) {
+        groupRef(code).child("admin").runTransaction(object : Transaction.Handler {
+            override fun doTransaction(cur: MutableData): Transaction.Result {
+                if (cur.value == null) cur.value = id
+                return Transaction.success(cur)
+            }
+
+            override fun onComplete(e: DatabaseError?, committed: Boolean, cur: DataSnapshot?) {}
+        })
+    }
+
+    fun observeAdmin(code: String, onUpdate: (String?) -> Unit): ValueEventListener {
+        val l = object : ValueEventListener {
+            override fun onDataChange(s: DataSnapshot) {
+                onUpdate(s.getValue(String::class.java))
+            }
+
+            override fun onCancelled(e: DatabaseError) {}
+        }
+        groupRef(code).child("admin").addValueEventListener(l)
+        return l
+    }
+
+    fun stopAdmin(code: String, listener: ValueEventListener) {
+        groupRef(code).child("admin").removeEventListener(listener)
+    }
+
+    /** Удаление устройства из группы (кнопка администратора) */
+    fun removeDevice(code: String, id: String) {
+        devicesRef(code).child(id).removeValue()
     }
 
     // ---------- «Найти телефон» ----------

@@ -110,7 +110,12 @@ fun GroupScreen() {
             Button(enabled = code.length >= 4, onClick = { Prefs.groupCode = code.trim() }) {
                 Text("Войти")
             }
-            OutlinedButton(onClick = { Prefs.groupCode = Prefs.newGroupCode() }) {
+            OutlinedButton(onClick = {
+                val c = Prefs.newGroupCode()
+                Prefs.groupCode = c
+                // Создатель группы становится её администратором
+                com.locationshare.app.data.Repo.claimAdmin(c, Prefs.deviceId)
+            }) {
                 Text("Создать группу")
             }
         }

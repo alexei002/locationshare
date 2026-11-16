@@ -166,7 +166,6 @@ class LocationService : Service() {
             lastPublished = loc
             lastPublishTs = now
             Repo.publishCurrent(code, Prefs.deviceId, Prefs.deviceName, loc, batteryPct())
-            if (moved >= 25) Repo.addTrackPoint(code, Prefs.deviceId, loc)
         }
     }
 

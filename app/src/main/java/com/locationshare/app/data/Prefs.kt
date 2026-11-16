@@ -8,11 +8,21 @@ import java.util.UUID
 
 object Prefs {
     private lateinit var sp: SharedPreferences
+    private lateinit var appContext: android.content.Context
 
+    // Стабильный id: ANDROID_ID не меняется при переустановке приложения
+    // (защита от дублей в группе после переустановок)
     val deviceId: String by lazy {
         var id = sp.getString("deviceId", null)
         if (id == null) {
-            id = UUID.randomUUID().toString().substring(0, 8)
+            id = try {
+                android.provider.Settings.Secure.getString(
+                    appContext.contentResolver,
+                    android.provider.Settings.Secure.ANDROID_ID,
+                )?.take(8)?.ifBlank { null } ?: UUID.randomUUID().toString().substring(0, 8)
+            } catch (_: Exception) {
+                UUID.randomUUID().toString().substring(0, 8)
+            }
             sp.edit().putString("deviceId", id).apply()
         }
         id
@@ -41,7 +51,8 @@ object Prefs {
 
     fun init(context: Context) {
         if (::sp.isInitialized) return
-        sp = context.applicationContext.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+        appContext = context.applicationContext
+        sp = appContext.getSharedPreferences("prefs", Context.MODE_PRIVATE)
         deviceNameFlow.value = sp.getString("name", null) ?: Build.MODEL
         groupCodeFlow.value = sp.getString("group", null)
         sharingFlow.value = sp.getBoolean("sharing", true)

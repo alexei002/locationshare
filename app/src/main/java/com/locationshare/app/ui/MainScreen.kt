@@ -4,10 +4,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,7 +56,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,12 +72,11 @@ import com.locationshare.app.service.RingPlayer
 import com.yandex.mapkit.Animation
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
-import com.yandex.mapkit.geometry.Polyline
 import com.yandex.runtime.image.ImageProvider
 import com.yandex.mapkit.map.CameraPosition
 import com.yandex.mapkit.map.IconStyle
+import com.yandex.mapkit.map.MapInputListener
 import com.yandex.mapkit.map.PlacemarkMapObject
-import com.yandex.mapkit.map.PolylineMapObject
 import com.yandex.mapkit.mapview.MapView
 import kotlin.math.abs
 import kotlin.math.ln
@@ -96,11 +94,17 @@ fun MainScreen() {
     var ringTarget by remember { mutableStateOf<Repo.DeviceState?>(null) }
     var ringingBy by remember { mutableStateOf<String?>(null) }
     var update by remember { mutableStateOf<Updater.Update?>(null) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
+    var adminId by remember { mutableStateOf<String?>(null) }
     val myId = Prefs.deviceId
 
     DisposableEffect(group) {
         val listener = Repo.observe(group) { devices = it }
-        onDispose { Repo.stop(group, listener) }
+        val adminL = Repo.observeAdmin(group) { adminId = it }
+        onDispose {
+            Repo.stop(group, listener)
+            Repo.stopAdmin(group, adminL)
+        }
     }
 
     // Входящая команда «прозвонить меня» от другого устройства группы
@@ -128,8 +132,81 @@ fun MainScreen() {
         else EcoWorker.cancel(ctx)
     }
 
+    val selected = devices.firstOrNull { it.id == selectedId }
+
     Box(Modifier.fillMaxSize()) {
-        MapArea(devices)
+        MapArea(
+            devices = devices,
+            onMarkerTap = { selectedId = it },
+            onMapTap = { selectedId = null },
+        )
+
+        // Карточка устройства: тап по маркеру
+        selected?.let { d ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(16.dp),
+                tonalElevation = 4.dp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp).fillMaxWidth(0.9f),
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(14.dp)
+                                .background(androidx.compose.ui.graphics.Color(colorFor(d.id)), CircleShape)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            d.name + if (d.id == myId) " (Вы)" else "",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        d.battery?.let { Text("$it%", style = MaterialTheme.typography.bodyMedium) }
+                        IconButton(onClick = { selectedId = null }, modifier = Modifier.size(32.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = "Закрыть", modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    d.current?.let {
+                        Text(
+                            "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (d.id != myId) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+                            OutlinedButton(onClick = { ringTarget = d }) { Text("Прозвонить") }
+                            if (adminId == myId) {
+                                TextButton(onClick = {
+                                    Repo.removeDevice(group, d.id)
+                                    selectedId = null
+                                }) { Text("Удалить из группы", color = MaterialTheme.colorScheme.error) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Баннер обновления
+        update?.let { u ->
+            Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 24.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 14.dp),
+                ) {
+                    Text("Доступна версия ${u.version}", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = {
+                        Updater.downloadAndInstall(ctx, u.url, u.tag); update = null
+                    }) { Text("Установить") }
+                    TextButton(onClick = { update = null }) { Text("Позже") }
+                }
+            }
+        }
 
         // Компактная нижняя панель: чипы устройств + кнопка настроек
         Surface(
@@ -167,35 +244,20 @@ fun MainScreen() {
                             )
                         }
                     }
-                    items(devices, key = { it.id }) { d -> DeviceChip(d) { ringTarget = d } }
+                    items(devices, key = { it.id }) { d -> DeviceChip(d) { selectedId = d.id; ringTarget = d } }
                 }
                 IconButton(onClick = { showSettings = true }) {
                     Icon(Icons.Filled.Settings, contentDescription = "Настройки")
                 }
             }
         }
-
-        update?.let { u ->
-            Surface(
-                color = MaterialTheme.colorScheme.primaryContainer,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = 14.dp),
-                ) {
-                    Text("Доступна версия ${u.version}", style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = {
-                        Updater.downloadAndInstall(ctx, u.url, u.tag); update = null
-                    }) { Text("Установить") }
-                    TextButton(onClick = { update = null }) { Text("Позже") }
-                }
-            }
-        }
     }
 
-    if (showSettings) SettingsScreen(onClose = { showSettings = false })
+    if (showSettings) SettingsScreen(
+        onClose = { showSettings = false },
+        adminId = adminId,
+        devices = devices,
+    )
 
     ringTarget?.let { t ->
         AlertDialog(
@@ -204,7 +266,7 @@ fun MainScreen() {
             text = {
                 Text(
                     "Прозвонить «${if (t.id == Prefs.deviceId) "Вы" else t.name}» громким сигналом?\n\n" +
-                        "(на устройстве сработает будильник на 30 секунд; нажать и удерживать чип — меню)"
+                        "(нажать и удерживать чип — меню)"
                 )
             },
             confirmButton = {
@@ -235,7 +297,11 @@ fun MainScreen() {
 }
 
 @Composable
-private fun SettingsScreen(onClose: () -> Unit) {
+private fun SettingsScreen(
+    onClose: () -> Unit,
+    adminId: String?,
+    devices: List<Repo.DeviceState>,
+) {
     val sharing by Prefs.sharingFlow.collectAsState()
     val eco by Prefs.ecoFlow.collectAsState()
     val group = Prefs.groupCode ?: ""
@@ -244,6 +310,8 @@ private fun SettingsScreen(onClose: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var updState by remember { mutableStateOf<String?>(null) }
+    val myId = Prefs.deviceId
+    val isAdmin = adminId == myId
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -283,6 +351,47 @@ private fun SettingsScreen(onClose: () -> Unit) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
+
+            // Администрирование группы
+            Text(
+                "Администрирование",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 20.dp),
+            )
+            when {
+                adminId == null -> {
+                    Text("Администратор не назначен", fontSize = 12.sp)
+                    OutlinedButton(onClick = { Repo.claimAdmin(group, myId) }) {
+                        Text("Стать администратором")
+                    }
+                }
+                isAdmin -> Text("Вы администратор группы", fontSize = 12.sp)
+                else -> Text(
+                    "Администратор: ${devices.firstOrNull { it.id == adminId }?.name ?: adminId}",
+                    fontSize = 12.sp,
+                )
+            }
+            if (isAdmin && devices.size > 1) {
+                Text("Устройства (${devices.size}):", fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+                for (d in devices) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 2.dp),
+                    ) {
+                        Text(
+                            d.name + if (d.id == myId) " (Вы)" else "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (d.id != myId) {
+                            TextButton(onClick = { Repo.removeDevice(group, d.id) }) {
+                                Text("Удалить", color = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    }
+                }
+            }
+
             Text(
                 "Группа: $group",
                 style = MaterialTheme.typography.bodyMedium,
@@ -290,7 +399,7 @@ private fun SettingsScreen(onClose: () -> Unit) {
             )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
+                modifier = Modifier.padding(top = 8.dp),
             ) {
                 OutlinedButton(onClick = { showQr = true }) { Text("QR группы") }
                 OutlinedButton(onClick = { onClose(); Prefs.groupCode = null }) {
@@ -302,7 +411,7 @@ private fun SettingsScreen(onClose: () -> Unit) {
             // Обновления
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 24.dp),
+                modifier = Modifier.padding(top = 16.dp, bottom = 24.dp),
             ) {
                 OutlinedButton(onClick = {
                     updState = "проверяю…"
@@ -482,14 +591,17 @@ private fun pinBitmap(label: String, color: Int): Bitmap {
 }
 
 @Composable
-fun MapArea(devices: List<Repo.DeviceState>) {
+fun MapArea(
+    devices: List<Repo.DeviceState>,
+    onMarkerTap: (String) -> Unit,
+    onMapTap: () -> Unit,
+) {
     val myId = Prefs.deviceId
     var follow by remember { mutableStateOf(true) }
     var centered by remember { mutableStateOf(false) }
     var fitAll by remember { mutableStateOf(false) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     val placemarks = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
-    val lines = remember { mutableStateMapOf<String, PolylineMapObject>() }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
@@ -518,7 +630,18 @@ fun MapArea(devices: List<Repo.DeviceState>) {
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
-            factory = { ctx -> MapView(ctx).apply { map.isRotateGesturesEnabled = false } },
+            factory = { ctx ->
+                MapView(ctx).apply {
+                    map.isRotateGesturesEnabled = false
+                    map.addInputListener(object : MapInputListener {
+                        override fun onTap(m: com.yandex.mapkit.map.Map, p: Point) {
+                            onMapTap()
+                        }
+
+                        override fun onLongTap(m: com.yandex.mapkit.map.Map, p: Point) {}
+                    })
+                }
+            },
             update = { mv ->
                 mapView = mv
                 val objs = mv.map.mapObjects
@@ -532,22 +655,12 @@ fun MapArea(devices: List<Repo.DeviceState>) {
                                 ImageProvider.fromBitmap(pinBitmap(labelFor(d, myId), color)),
                                 IconStyle().apply { scale = 0.55f },
                             )
+                            addTapListener { _, _ -> onMarkerTap(d.id); true }
                         }
                     }
                     d.current?.let { pl.geometry = Point(it.lat, it.lon) }
-
-                    lines.remove(d.id)?.let { objs.remove(it) }
-                    if (d.track.size >= 2 && d.online) {
-                        lines[d.id] = objs.addPolyline(
-                            Polyline(d.track.map { Point(it.lat, it.lon) })
-                        ).apply {
-                            setStrokeColor((color and 0x00FFFFFF) or 0x80000000.toInt())
-                            setStrokeWidth(5f)
-                        }
-                    }
                 }
                 for (k in placemarks.keys - seen) placemarks.remove(k)?.let { objs.remove(it) }
-                for (k in lines.keys - seen) lines.remove(k)?.let { objs.remove(it) }
 
                 val me = devices.firstOrNull { it.id == myId && it.current != null }?.current
                 if (fitAll) {
