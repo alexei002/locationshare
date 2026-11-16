@@ -76,6 +76,13 @@ object Repo {
                     val lat = cur.child("lat").getValue(Double::class.java) ?: continue
                     val lon = cur.child("lon").getValue(Double::class.java) ?: continue
                     val ts = cur.child("ts").getValue(Long::class.java) ?: 0L
+
+                    // Самоочистка: записи старше 24 ч (переустановки, ушедшие устройства)
+                    if (ts > 0 && System.currentTimeMillis() - ts > 24 * 3_600_000L) {
+                        dev.ref.removeValue()
+                        continue
+                    }
+
                     val track = dev.child("track").children.mapNotNull { p ->
                         val la = p.child("lat").getValue(Double::class.java) ?: return@mapNotNull null
                         val lo = p.child("lon").getValue(Double::class.java) ?: return@mapNotNull null
