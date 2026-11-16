@@ -15,6 +15,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -539,6 +541,7 @@ fun MainScreen() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsScreen(
     onClose: () -> Unit,
@@ -644,7 +647,9 @@ private fun SettingsScreen(
                     Toast.makeText(ctx, ctx.getString(R.string.toast_code_copied), Toast.LENGTH_SHORT).show()
                 }) { Text(stringResource(R.string.btn_copy)) }
             }
-            Row(
+            // FlowRow: на узких экранах кнопки переносятся на следующую строку,
+            // а не сплющиваются в вытянутую «пустую» кнопку (артефакт на маленьких экранах)
+            FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.padding(top = 8.dp),
             ) {
@@ -676,11 +681,13 @@ private fun SettingsScreen(
                     }
                 }) { Text(stringResource(R.string.btn_check_updates)) }
                 updState?.let {
+                    // weight(1f): длинный текст ошибки («не удалось: …») переносится,
+                    // а не выталкивает кнопку за экран
                     Text(
                         it,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.padding(start = 8.dp),
+                        modifier = Modifier.weight(1f).padding(start = 8.dp),
                     )
                 }
             }
