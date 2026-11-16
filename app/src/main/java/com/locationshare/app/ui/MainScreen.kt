@@ -7,6 +7,7 @@ import android.graphics.Paint
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,6 +99,9 @@ fun MainScreen() {
     var ringingBy by remember { mutableStateOf<String?>(null) }
     var update by remember { mutableStateOf<Updater.Update?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
+    var selectedGroup by remember { mutableStateOf<List<String>?>(null) }
+    var focusTrigger by remember { mutableStateOf(0) }
+    var focusId by remember { mutableStateOf<String?>(null) }
     var adminId by remember { mutableStateOf<String?>(null) }
     var fitTrigger by remember { mutableStateOf(0) }
     var centerTrigger by remember { mutableStateOf(0) }
@@ -139,14 +143,18 @@ fun MainScreen() {
     }
 
     val selected = devices.firstOrNull { it.id == selectedId }
+    val selectedDevices = selectedGroup?.mapNotNull { id -> devices.firstOrNull { it.id == id } }
 
     Box(Modifier.fillMaxSize()) {
         MapArea(
             devices = devices,
-            onMarkerTap = { selectedId = it },
-            onMapTap = { selectedId = null },
+            onMarkerTap = { selectedId = it; selectedGroup = null },
+            onMapTap = { selectedId = null; selectedGroup = null },
+            onGroupTap = { selectedGroup = it; selectedId = null },
             fitTrigger = fitTrigger,
             centerTrigger = centerTrigger,
+            focusTrigger = focusTrigger,
+            focusId = focusId,
         )
 
         // Баннер обновления сверху
@@ -174,7 +182,65 @@ fun MainScreen() {
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            selected?.let { d ->
+            if (!selectedDevices.isNullOrEmpty()) {
+                // Карточка группы: тап по кружку близких устройств
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(16.dp),
+                    tonalElevation = 4.dp,
+                    modifier = Modifier.padding(bottom = 6.dp).fillMaxWidth(0.92f),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "В этой точке: ${selectedDevices.size}",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            IconButton(onClick = { selectedGroup = null }, modifier = Modifier.size(32.dp)) {
+                                Icon(Icons.Filled.Close, contentDescription = "Закрыть", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        for (d in selectedDevices) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { focusId = d.id; focusTrigger++ }
+                                    .padding(vertical = 4.dp),
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(12.dp)
+                                        .background(androidx.compose.ui.graphics.Color(colorFor(d.id)), CircleShape)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        d.name + if (d.id == myId) " (Вы)" else "",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                    d.current?.let {
+                                        Text(
+                                            "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                }
+                                d.battery?.let { Text("$it%", style = MaterialTheme.typography.bodySmall) }
+                                if (d.id != myId) {
+                                    TextButton(onClick = { ringTarget = d }) { Text("🔔") }
+                                    if (adminId == myId) {
+                                        TextButton(onClick = {
+                                            Repo.removeDevice(group, d.id)
+                                        }) { Text("🗑", color = MaterialTheme.colorScheme.error) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else selected?.let { d ->
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(16.dp),
@@ -660,8 +726,11 @@ fun MapArea(
     devices: List<Repo.DeviceState>,
     onMarkerTap: (String) -> Unit,
     onMapTap: () -> Unit,
+    onGroupTap: (List<String>) -> Unit = {},
     fitTrigger: Int = 0,
     centerTrigger: Int = 0,
+    focusTrigger: Int = 0,
+    focusId: String? = null,
 ) {
     val myId = Prefs.deviceId
     var follow by remember { mutableStateOf(true) }
@@ -670,6 +739,7 @@ fun MapArea(
     val placemarks = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
     // Схлопнутые группы: ключ «grp:<id первого>» → общий кружок с числом
     val groupPins = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
+    val groupMembers = remember { mutableStateMapOf<String, List<String>>() }
     val tapListeners = remember { mutableStateMapOf<String, MapObjectTapListener>() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val devicesNow by rememberUpdatedState(devices)
@@ -750,6 +820,25 @@ fun MapArea(
         }
     }
 
+    // Фокус на устройстве из карточки группы
+    LaunchedEffect(focusTrigger) {
+        if (focusTrigger == 0) return@LaunchedEffect
+        val id = focusId ?: return@LaunchedEffect
+        val mv = mapView ?: return@LaunchedEffect
+        val target = devicesNow.firstOrNull { it.id == id }?.current ?: return@LaunchedEffect
+        follow = false
+        centered = true
+        mv.map.move(
+            CameraPosition(
+                Point(target.lat, target.lon),
+                mv.map.cameraPosition.zoom.coerceAtLeast(16f),
+                0f, 0f,
+            ),
+            Animation(Animation.Type.SMOOTH, 0.5f),
+            null,
+        )
+    }
+
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -827,9 +916,10 @@ fun MapArea(
                     val head = g.first() // самый «свежий» в группе
                     val key = "grp:${head.id}"
                     groupKeys.add(key)
+                    groupMembers[key] = g.map { it.id }
                     if (!tapListeners.contains(key)) {
                         tapListeners[key] = MapObjectTapListener { _, _ ->
-                            onMarkerTap(head.id); true
+                            onGroupTap(groupMembers[key] ?: listOf(head.id)); true
                         }
                     }
                     val gp = groupPins.getOrPut(key) {
@@ -846,6 +936,7 @@ fun MapArea(
                 for (k in groupPins.keys - groupKeys) {
                     groupPins.remove(k)?.let { objs.remove(it) }
                     tapListeners.remove(k)
+                    groupMembers.remove(k)
                 }
 
                 val me = devices.firstOrNull { it.id == myId && it.current != null }?.current
