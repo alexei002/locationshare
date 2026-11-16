@@ -821,6 +821,9 @@ fun MapArea(
                     tapListeners.remove(k)
                 }
 
+                // Кластеризация запускается явно: (радиус в единицах масштаба, мин. размер кластера)
+                objs.clusterPlacemarks(60.0, 2)
+
                 val me = devices.firstOrNull { it.id == myId && it.current != null }?.current
                 if (!centered) {
                     val first = me ?: devices.firstOrNull { it.current != null }?.current
