@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "563102540118",
+    "project_id": "locationshare-e897f",
+    "storage_bucket": "locationshare-e897f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:563102540118:android:ec690fb740fe48c54436f7",
+        "android_client_info": {
+          "package_name": "com.locationshare.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD-IeWzQwOrWwKyTDj-Bzepbowu0IMOSg8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
