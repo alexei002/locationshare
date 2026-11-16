@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -68,6 +70,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -96,8 +99,10 @@ import com.yandex.mapkit.map.IconStyle
 import com.yandex.mapkit.map.InputListener
 import com.yandex.mapkit.map.MapObjectTapListener
 import com.yandex.mapkit.map.PlacemarkMapObject
+import com.yandex.mapkit.map.TextStyle
 import com.yandex.mapkit.mapview.MapView
 import java.lang.ref.WeakReference
+import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.min
 import kotlinx.coroutines.delay
@@ -178,26 +183,15 @@ fun MainScreen() {
     // Стабильные цвета устройств без коллизий (hash из colorFor мог дублировать цвета)
     val colorMap = remember(devices) { colorMapFor(devices.map { it.id }) }
 
-    Box(Modifier.fillMaxSize()) {
-        MapArea(
-            devices = devices,
-            onMarkerTap = { selectedId = it; selectedGroup = null },
-            onMapTap = { selectedId = null; selectedGroup = null },
-            onGroupTap = { selectedGroup = it; selectedId = null },
-            fitTrigger = fitTrigger,
-            centerTrigger = centerTrigger,
-            focusTrigger = focusTrigger,
-            focusId = focusId,
-            follow = follow,
-            onFollowChange = { follow = it },
-        )
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-        // Баннер обновления сверху
+    // Баннер и карточки вынесены в лямбды: в портрете рендерим их в нижнем столбце
+    // (как раньше), в ландшафте — у верхнего края, чтобы нижний стек не съедал экран
+    val updateBanner: @Composable () -> Unit = {
         update?.let { u ->
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -211,31 +205,30 @@ fun MainScreen() {
                 }
             }
         }
+    }
 
-        // Единый нижний столбец: карточка → кнопки → панель чипов (не перекрываются)
-        Column(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            if (!selectedDevices.isNullOrEmpty()) {
-                // Карточка группы: тап по кружку близких устройств
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(16.dp),
-                    tonalElevation = 4.dp,
-                    modifier = Modifier.padding(bottom = 6.dp).fillMaxWidth(0.92f),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "В этой точке: ${selectedDevices.size}",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f),
-                            )
-                            IconButton(onClick = { selectedGroup = null }, modifier = Modifier.size(48.dp)) {
-                                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_close), modifier = Modifier.size(18.dp))
-                            }
+    val groupCard: @Composable () -> Unit = {
+        if (!selectedDevices.isNullOrEmpty()) {
+            // Карточка группы: тап по кружку близких устройств
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(16.dp),
+                tonalElevation = 4.dp,
+                modifier = Modifier.padding(bottom = 6.dp).fillMaxWidth(0.92f),
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "В этой точке: ${selectedDevices.size}",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { selectedGroup = null }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_close), modifier = Modifier.size(18.dp))
                         }
+                    }
+                    // Список ограничен по высоте: 6+ устройств не должны съедать экран
+                    Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
                         for (d in selectedDevices) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -283,53 +276,101 @@ fun MainScreen() {
                         }
                     }
                 }
-            } else selected?.let { d ->
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(16.dp),
-                    tonalElevation = 4.dp,
-                    modifier = Modifier.padding(bottom = 6.dp).fillMaxWidth(0.92f),
-                ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                Modifier
-                                    .size(14.dp)
-                                    .background(androidx.compose.ui.graphics.Color(colorMap[d.id] ?: colorFor(d.id)), CircleShape)
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                d.name + if (d.id == myId) " (Вы)" else "",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.weight(1f),
-                            )
-                            d.battery?.let { Text("$it%", style = MaterialTheme.typography.bodyMedium) }
-                            IconButton(onClick = { selectedId = null }, modifier = Modifier.size(48.dp)) {
-                                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_close), modifier = Modifier.size(18.dp))
-                            }
+            }
+        }
+    }
+
+    val deviceCard: @Composable () -> Unit = {
+        if (selectedDevices.isNullOrEmpty()) selected?.let { d ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(16.dp),
+                tonalElevation = 4.dp,
+                modifier = Modifier.padding(bottom = 6.dp).fillMaxWidth(0.92f),
+            ) {
+                Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(14.dp)
+                                .background(androidx.compose.ui.graphics.Color(colorMap[d.id] ?: colorFor(d.id)), CircleShape)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            d.name + if (d.id == myId) " (Вы)" else "",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        d.battery?.let { Text("$it%", style = MaterialTheme.typography.bodyMedium) }
+                        IconButton(onClick = { selectedId = null }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.cd_close), modifier = Modifier.size(18.dp))
                         }
-                        d.current?.let {
-                            tick // тикер: пересчитать «обновлено»
-                            Text(
-                                "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        if (d.id != myId) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(top = 6.dp),
-                            ) {
-                                OutlinedButton(onClick = { ringTarget = d }) { Text(stringResource(R.string.btn_ring)) }
-                                if (adminId == myId) {
-                                    TextButton(onClick = { deleteTarget = d }) {
-                                        Text(stringResource(R.string.btn_remove_from_group), color = MaterialTheme.colorScheme.error)
-                                    }
+                    }
+                    d.current?.let {
+                        tick // тикер: пересчитать «обновлено»
+                        Text(
+                            "обновлено ${timeAgo(it.ts)} · точность ±${d.accuracy.toInt()} м",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    if (d.id != myId) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(top = 6.dp),
+                        ) {
+                            OutlinedButton(onClick = { ringTarget = d }) { Text(stringResource(R.string.btn_ring)) }
+                            if (adminId == myId) {
+                                TextButton(onClick = { deleteTarget = d }) {
+                                    Text(stringResource(R.string.btn_remove_from_group), color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        MapArea(
+            devices = devices,
+            onMarkerTap = { selectedId = it; selectedGroup = null },
+            onMapTap = { selectedId = null; selectedGroup = null },
+            onGroupTap = { selectedGroup = it; selectedId = null },
+            fitTrigger = fitTrigger,
+            centerTrigger = centerTrigger,
+            focusTrigger = focusTrigger,
+            focusId = focusId,
+            follow = follow,
+            onFollowChange = { follow = it },
+            selectedId = selectedId,
+        )
+
+        if (landscape) {
+            // Ландшафт: баннер и карточки — у верхнего края, внизу только кнопки и чипы
+            Column(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(top = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                updateBanner()
+                groupCard()
+                deviceCard()
+            }
+        } else {
+            // Портрет: баннер обновления сверху
+            Box(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp)) {
+                updateBanner()
+            }
+        }
+
+        // Нижний столбец: (портрет: карточки →) кнопки → панель чипов (не перекрываются)
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (!landscape) {
+                groupCard()
+                deviceCard()
             }
 
             // Кнопки карты: «Все» и «центрировать на мне»
@@ -895,6 +936,7 @@ fun MapArea(
     focusId: String? = null,
     follow: Boolean = true,
     onFollowChange: (Boolean) -> Unit = {},
+    selectedId: String? = null,
 ) {
     val myId = Prefs.deviceId
     var centered by remember { mutableStateOf(false) }
@@ -902,6 +944,8 @@ fun MapArea(
     val placemarks = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
     // Текущий цвет пина: при сдвиге палитры (colorMapFor) перерисовываем иконку
     val pinColors = remember { mutableStateMapOf<String, Int>() }
+    // Показана ли подпись у пина (и с какой темой карты): кэш, чтобы не звать setText лишний раз
+    val labelShown = remember { mutableStateMapOf<String, Pair<Boolean, Boolean>>() }
     // Схлопнутые группы: ключ «grp:<id первого>» → общий кружок с числом
     val groupPins = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
     val groupMembers = remember { mutableStateMapOf<String, List<String>>() }
@@ -911,6 +955,29 @@ fun MapArea(
     val darkTheme = isSystemInDarkTheme()
     // Стабильные цвета устройств без коллизий
     val colorMap = remember(devices) { colorMapFor(devices.map { it.id }) }
+
+    // Стили подписей пинов (объекты переиспользуются, в update не создаём).
+    // Текст с контрастной обводкой: белым по тёмной карте, тёмным по светлой.
+    val labelStyleDark = remember {
+        TextStyle().apply {
+            size = 12f
+            color = 0xFFFFFFFF.toInt()
+            outlineColor = 0xFF000000.toInt()
+            outlineWidth = 2f
+            placement = TextStyle.Placement.BOTTOM
+            offsetFromIcon = true
+        }
+    }
+    val labelStyleLight = remember {
+        TextStyle().apply {
+            size = 12f
+            color = 0xFF212121.toInt()
+            outlineColor = 0xFFFFFFFF.toInt()
+            outlineWidth = 2f
+            placement = TextStyle.Placement.BOTTOM
+            offsetFromIcon = true
+        }
+    }
 
     // Держим сильные ссылки: MapKit принимает WeakReference
     val inputListener = remember {
@@ -926,6 +993,11 @@ fun MapArea(
     // Пользователь сам двигает камеру — выключаем следование
     // (GESTURES = жест пользователя, программные move приходят как APPLICATION)
     val setFollow by rememberUpdatedState(onFollowChange)
+    // Подписи пинов зависят от зума, а жесты зума не вызывают рекомпозицию:
+    // тикаем zoomTick при изменившемся зуме, update-блок его читает и пересчитывает подписи.
+    // По позиции не тикаем — иначе follow-режим (программные move при том же зуме) зациклит.
+    var lastZoom by remember { mutableStateOf(Float.MIN_VALUE) }
+    var zoomTick by remember { mutableStateOf(0) }
     val cameraListener = remember {
         object : CameraListener {
             override fun onCameraPositionChanged(
@@ -935,6 +1007,10 @@ fun MapArea(
                 finished: Boolean,
             ) {
                 if (finished && reason == CameraUpdateReason.GESTURES) setFollow(false)
+                if (finished && abs(p.zoom - lastZoom) > 0.01f) {
+                    lastZoom = p.zoom
+                    zoomTick++
+                }
             }
         }
     }
@@ -1035,9 +1111,11 @@ fun MapArea(
             },
             update = { mv ->
                 mapView = mv
+                zoomTick // зум изменился жестами без рекомпозиции — пересчитать подписи пинов
                 // Ночная тема карты вслед за системной (MapKit 4.45: setNightModeEnabled)
                 if (mv.map.isNightModeEnabled != darkTheme) mv.map.setNightModeEnabled(darkTheme)
                 val objs = mv.map.mapObjects
+                val zoom = mv.map.cameraPosition.zoom
                 val seen = HashSet<String>()
                 for (d in devices) {
                     seen.add(d.id)
@@ -1065,10 +1143,22 @@ fun MapArea(
                         )
                     }
                     d.current?.let { pl.geometry = Point(it.lat, it.lon) }
+                    // Подпись с именем под пином: при близком зуме, малом числе устройств
+                    // или для выбранного. setText("") прячет, повторы отсекает кэш labelShown.
+                    val showLabel = zoom >= 14f || devices.size <= 4 || d.id == selectedId
+                    val cur = labelShown[d.id]
+                    if (cur == null || cur.first != showLabel || cur.second != darkTheme) {
+                        pl.setText(
+                            if (showLabel) labelFor(d, myId) else "",
+                            if (darkTheme) labelStyleDark else labelStyleLight,
+                        )
+                        labelShown[d.id] = showLabel to darkTheme
+                    }
                 }
                 for (k in placemarks.keys - seen) {
                     placemarks.remove(k)?.let { objs.remove(it) }
                     pinColors.remove(k)
+                    labelShown.remove(k)
                     tapListeners.remove(k)
                 }
 

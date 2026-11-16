@@ -7,14 +7,16 @@ import kotlin.math.abs
 private val PALETTE = intArrayOf(
     0xFFE53935.toInt(), 0xFF1E88E5.toInt(), 0xFF43A047.toInt(), 0xFFFB8C00.toInt(),
     0xFF8E24AA.toInt(), 0xFF00ACC1.toInt(), 0xFFF4511E.toInt(), 0xFF3949AB.toInt(),
+    0xFFFDD835.toInt(), 0xFF00897B.toInt(), 0xFFD81B60.toInt(), 0xFF6D4C41.toInt(),
+    0xFFC0CA33.toInt(), 0xFF5E35B1.toInt(), 0xFF455A64.toInt(), 0xFF212121.toInt(),
 )
 
 internal fun colorFor(id: String): Int = PALETTE[abs(id.hashCode()) % PALETTE.size]
 
 /**
  * Стабильное назначение цветов устройствам: ids сортируются и получают цвета палитры
- * по порядку, циклично при >8 устройствах. В отличие от hash в colorFor не даёт
- * дублей цветов, пока устройств не больше 8.
+ * по порядку, циклично при >16 устройствах. В отличие от hash в colorFor не даёт
+ * дублей цветов, пока устройств не больше 16.
  */
 internal fun colorMapFor(ids: Collection<String>): Map<String, Int> =
     ids.sorted().withIndex().associate { (i, id) -> id to PALETTE[i % PALETTE.size] }
