@@ -2,6 +2,7 @@ package com.locationshare.app
 
 import android.app.Application
 import com.google.firebase.database.FirebaseDatabase
+import com.locationshare.app.data.CrashReporter
 import com.locationshare.app.data.Prefs
 import com.locationshare.app.data.Repo
 import com.yandex.mapkit.MapKitFactory
