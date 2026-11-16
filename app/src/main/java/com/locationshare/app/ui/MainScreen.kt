@@ -154,13 +154,21 @@ fun MainScreen() {
         onDispose { Repo.stopRing(group, myId, l) }
     }
 
-    // Раз в день тихо проверяем обновления
+    // Раз в день проверяем обновления: найдено — скачиваем и сами открываем установку.
+    // Без права «неизвестные источники» автоустановка невозможна — показываем баннер
+    // (кнопка «Установить» откроет системные настройки и установщик)
     LaunchedEffect(Unit) {
         val today = System.currentTimeMillis() / 86_400_000L
         if (Prefs.lastUpdateCheck != today) {
             Prefs.lastUpdateCheck = today
             val r = Updater.check()
-            if (r is Updater.CheckResult.Found) update = r.u
+            if (r is Updater.CheckResult.Found) {
+                if (ctx.packageManager.canRequestPackageInstalls()) {
+                    Updater.downloadAndInstall(ctx, r.u.url, r.u.tag)
+                } else {
+                    update = r.u
+                }
+            }
         }
     }
 
