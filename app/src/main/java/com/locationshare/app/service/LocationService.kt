@@ -104,7 +104,11 @@ class LocationService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_MAP_HIDDEN -> mapVisible = false
-            else -> mapVisible = true // START и MAP_VISIBLE: карта открыта
+            ACTION_MAP_VISIBLE -> mapVisible = true
+            // START (boot/watchdog) и sticky-рестарт (null intent): карта не открыта —
+            // экономный режим. Раньше здесь стояло true: после перезагрузки телефона
+            // сервис вечно держал HIGH_ACCURACY/5с с потушенным экраном.
+            else -> mapVisible = false
         }
 
         // Нет разрешения геолокации — location-FGS запускать нельзя (SecurityException на 14+)
