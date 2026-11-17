@@ -94,6 +94,10 @@ import com.locationshare.app.service.RingPlayer
 import com.locationshare.app.service.WatchdogReceiver
 import com.yandex.mapkit.Animation
 import com.yandex.mapkit.MapKitFactory
+import com.yandex.mapkit.ScreenPoint
+import com.yandex.mapkit.ScreenRect
+import com.yandex.mapkit.geometry.BoundingBox
+import com.yandex.mapkit.geometry.Geometry
 import com.yandex.mapkit.geometry.Point
 import com.yandex.mapkit.geometry.Polyline
 import com.yandex.runtime.image.ImageProvider
@@ -1099,21 +1103,19 @@ fun MapArea(
         onFollowChange(false)
         val minLat = pts.minOf { it.lat }; val maxLat = pts.maxOf { it.lat }
         val minLon = pts.minOf { it.lon }; val maxLon = pts.maxOf { it.lon }
-        val center = Point((minLat + maxLat) / 2, (minLon + maxLon) / 2)
-        // Спаны в проекции Меркатора (рад): без поправки на широте ~55° горизонталь
-        // растянута в ~1,7 раза — крайние пользователи не влезали в экран
-        fun mercY(lat: Double): Double =
-            ln(tan(Math.PI / 4 + Math.toRadians(lat.coerceIn(-85.0, 85.0)) / 2))
-        val spanY = (mercY(maxLat) - mercY(minLat)).coerceAtLeast(5e-5)
-        val spanX = Math.toRadians(maxLon - minLon).coerceAtLeast(5e-5)
-        val wPx = kotlin.math.max(mv.width, 256)
-        val hPx = kotlin.math.max(mv.height, 256)
-        // 0.7 — поле ~15% с каждой стороны, чтобы метки не прижимались к краю
-        val zLat = ln(2 * Math.PI / spanY * (hPx * 0.7 / 256.0)) / ln(2.0)
-        val zLon = ln(2 * Math.PI / spanX * (wPx * 0.7 / 256.0)) / ln(2.0)
-        val zoom = min(zLat, zLon).coerceIn(3.0, 18.0).toFloat()
+        // Зум считает сам MapKit: ручная формула завышала зум, т.к. width/height —
+        // физические пиксели, а шкала зума MapKit определена в dp (расхождение ~log2(density))
+        val bb = BoundingBox(Point(minLat, minLon), Point(maxLat, maxLon))
+        // ScreenRect — в физических пикселях; снизу поле больше: там карточки и панель чипов
+        val w = mv.width.toFloat()
+        val h = mv.height.toFloat()
+        val rect = ScreenRect(
+            ScreenPoint(w * 0.12f, h * 0.10f),
+            ScreenPoint(w * 0.88f, h * 0.82f),
+        )
+        val pos = mv.map.cameraPosition(Geometry.fromBoundingBox(bb), rect)
         mv.map.move(
-            CameraPosition(center, zoom, 0f, 0f),
+            CameraPosition(pos.target, pos.zoom.coerceIn(3f, 18f), 0f, 0f),
             Animation(Animation.Type.SMOOTH, 0.6f),
             null,
         )
