@@ -65,6 +65,11 @@ object Prefs {
         get() = sp.getBoolean("batteryRequestShown", false)
         set(v) { sp.edit().putBoolean("batteryRequestShown", v).apply() }
 
+    // Автодиалог «Разрешить всё время» уже показывался (один раз на установку)
+    var bgLocAsked: Boolean
+        get() = sp.getBoolean("bgLocAsked", false)
+        set(v) { sp.edit().putBoolean("bgLocAsked", v).apply() }
+
     fun init(context: Context) {
         if (::sp.isInitialized) return
         appContext = context.applicationContext

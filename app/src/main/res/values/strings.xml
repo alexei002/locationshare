@@ -43,6 +43,17 @@
     <string name="dialog_battery_body_list">Найдите LocationShare в списке и выберите «Не оптимизировать».</string>
     <string name="dialog_battery_body_off">Оптимизация уже отключена — фоновая работа разрешена.</string>
 
+    <!-- Xiaomi: фирменные киллеры поверх AOSP -->
+    <string name="dialog_battery_xiaomi_body">На Xiaomi этого мало: фирменный «Контроль активности» закрывает приложение через пару минут после сворачивания.\n1. «Автозапуск» — включите для LocationShare.\n2. «Контроль активности» — выберите «Нет ограничений».</string>
+    <string name="btn_xiaomi_autostart">Автозапуск</string>
+    <string name="btn_xiaomi_activity">Контроль активности</string>
+
+    <!-- Геолокация «Всё время» -->
+    <string name="dialog_bgloc_title">Разрешите геолокацию «Всё время»</string>
+    <string name="dialog_bgloc_body">Если система закроет приложение и перезапустит трекер в фоне, геолокация «при использовании» у него вырезается — местоположение перестаёт обновляться. Откроется экран доступа: выберите «Разрешить в любом режиме» (на других прошивках — «Разрешать всегда»).</string>
+    <string name="btn_grant_always">Выдать «Всё время»</string>
+    <string name="settings_bgloc_missing">Геолокация «при использовании»: после закрытия приложения трекер может замолчать. Выберите «Всё время».</string>
+
     <!-- Тосты -->
     <string name="toast_command_sent">Команда отправлена</string>
     <string name="toast_device_removed">Устройство удалено</string>

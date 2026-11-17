@@ -3,11 +3,8 @@ package com.locationshare.app.ui
 import android.Manifest
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,11 +19,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -68,9 +67,10 @@ fun AppRoot() {
         }
     }
 
-    // Сразу после выдачи локации — исключение из оптимизации батареи (один раз).
-    // Системные диалоги показываются последовательно: сначала локация, затем батарея.
+    // Сразу после выдачи локации — исключение из оптимизации батареи (один раз),
+    // затем — геолокация «Всё время» (один раз). Системные диалоги — последовательно.
     var askBattery by remember { mutableStateOf(false) }
+    var askBgLoc by remember { mutableStateOf(false) }
     LaunchedEffect(granted) {
         if (granted && !Prefs.batteryAsked) {
             val ignoring = try {
@@ -80,6 +80,9 @@ fun AppRoot() {
                 false
             }
             if (ignoring) Prefs.batteryAsked = true else askBattery = true
+        }
+        if (granted && !Prefs.bgLocAsked && !hasBackgroundLocation(ctx)) {
+            askBgLoc = true
         }
     }
 
@@ -106,7 +109,40 @@ fun AppRoot() {
         askBattery = false
         Prefs.batteryAsked = true
     }
+
+    // Только после закрытия батарейного: иначе два AlertDialog рисуются стопкой
+    if (askBgLoc && !askBattery) BgLocationDialog {
+        askBgLoc = false
+        Prefs.bgLocAsked = true
+    }
 }
+
+/** Запрос «Всё время»: диалог → карточка приложения (только так и выдаётся) */
+@Composable
+internal fun BgLocationDialog(onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = {
+                DeviceIntents.openLocationPermission(ctx)
+                onDismiss()
+            }) { Text(stringResource(R.string.btn_grant_always)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_later)) }
+        },
+        title = { Text(stringResource(R.string.dialog_bgloc_title)) },
+        text = { Text(stringResource(R.string.dialog_bgloc_body)) },
+    )
+}
+
+internal fun hasBackgroundLocation(ctx: Context): Boolean =
+    // До Android 10 фоновая геолокация выдаётся вместе с FINE — отдельного
+    // разрешения не существует, checkSelfPermission там всегда вернул бы DENIED
+    Build.VERSION.SDK_INT < 29 ||
+        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
+        PackageManager.PERMISSION_GRANTED
 
 private fun locationPerms(): Array<String> {
     val perms = mutableListOf(
@@ -147,14 +183,7 @@ fun PermissionsScreen(onRequest: () -> Unit, permanentlyDenied: Boolean = false)
     }
 }
 
-private fun openAppSettings(ctx: Context) {
-    try {
-        ctx.startActivity(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:com.locationshare.app"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-    } catch (_: Exception) {}
-}
+private fun openAppSettings(ctx: Context) = DeviceIntents.openAppDetails(ctx)
 
 @Composable
 fun GroupScreen() {

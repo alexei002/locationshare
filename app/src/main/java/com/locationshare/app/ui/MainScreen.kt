@@ -693,6 +693,30 @@ private fun SettingsScreen(
                 OutlinedButton(onClick = { showBat = true }) { Text(stringResource(R.string.btn_battery)) }
             }
 
+            // Индикатор «Всё время»: без фонового разрешения трекер после закрытия
+            // приложения теряет GPS (FGS из фона — без while-in-use доступа).
+            // Обновляем по ON_RESUME: пермишен выдаётся в системных настройках
+            var bgLocOk by remember { mutableStateOf(hasBackgroundLocation(ctx)) }
+            val owner = LocalLifecycleOwner.current
+            DisposableEffect(owner) {
+                val obs = LifecycleEventObserver { _, e ->
+                    if (e == Lifecycle.Event.ON_RESUME) bgLocOk = hasBackgroundLocation(ctx)
+                }
+                owner.lifecycle.addObserver(obs)
+                onDispose { owner.lifecycle.removeObserver(obs) }
+            }
+            if (!bgLocOk) {
+                Text(
+                    stringResource(R.string.settings_bgloc_missing),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                TextButton(onClick = { DeviceIntents.openLocationPermission(ctx) }) {
+                    Text(stringResource(R.string.btn_grant_always))
+                }
+            }
+
             // Обновления
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -883,18 +907,38 @@ fun BatteryDialog(onDismiss: () -> Unit) {
     }
     // После первого отказа система молча прячет прямой запрос — ведём в список настроек
     val firstAsk = !Prefs.batteryRequestShown
+    // У Xiaomi свои киллеры поверх AOSP: показываем шаги и кнопки на фирменные экраны
+    val xiaomi = remember { DeviceIntents.isXiaomi() }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_ok)) } },
         title = { Text(stringResource(R.string.dialog_battery_title)) },
         text = {
-            Text(
-                when {
-                    alreadyOff -> stringResource(R.string.dialog_battery_body_off)
-                    firstAsk -> stringResource(R.string.dialog_battery_body)
-                    else -> stringResource(R.string.dialog_battery_body_list)
+            Column {
+                Text(
+                    when {
+                        alreadyOff -> stringResource(R.string.dialog_battery_body_off)
+                        firstAsk -> stringResource(R.string.dialog_battery_body)
+                        else -> stringResource(R.string.dialog_battery_body_list)
+                    }
+                )
+                if (xiaomi) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.dialog_battery_xiaomi_body),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { DeviceIntents.openXiaomiAutostart(ctx) }) {
+                            Text(stringResource(R.string.btn_xiaomi_autostart))
+                        }
+                        OutlinedButton(onClick = { DeviceIntents.openXiaomiBatterySaver(ctx) }) {
+                            Text(stringResource(R.string.btn_xiaomi_activity))
+                        }
+                    }
                 }
-            )
+            }
         },
     )
     LaunchedEffect(Unit) {
