@@ -869,31 +869,55 @@ private fun DeviceChip(d: Repo.DeviceState, color: Int, tick: Int, onClick: () -
 @Composable
 fun BatteryDialog(onDismiss: () -> Unit) {
     val ctx = LocalContext.current
+    val alreadyOff = remember {
+        try {
+            ctx.getSystemService(android.os.PowerManager::class.java)
+                ?.isIgnoringBatteryOptimizations(ctx.packageName) == true
+        } catch (_: Exception) {
+            false
+        }
+    }
+    // После первого отказа система молча прячет прямой запрос — ведём в список настроек
+    val firstAsk = !Prefs.batteryRequestShown
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_ok)) } },
         title = { Text(stringResource(R.string.dialog_battery_title)) },
         text = {
-            Column {
-                Text(stringResource(R.string.dialog_battery_step1))
-                Text(stringResource(R.string.dialog_battery_step2))
-                Text(stringResource(R.string.dialog_battery_step3))
-            }
+            Text(
+                when {
+                    alreadyOff -> stringResource(R.string.dialog_battery_body_off)
+                    firstAsk -> stringResource(R.string.dialog_battery_body)
+                    else -> stringResource(R.string.dialog_battery_body_list)
+                }
+            )
         },
     )
     LaunchedEffect(Unit) {
+        if (alreadyOff) return@LaunchedEffect
         try {
-            val pm = ctx.getSystemService(android.os.PowerManager::class.java)
-            if (!pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
+            if (firstAsk) {
+                Prefs.batteryRequestShown = true
                 ctx.startActivity(
                     Intent(
                         android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
                         android.net.Uri.parse("package:${ctx.packageName}"),
                     )
                 )
+            } else {
+                openBatteryOptimizationList(ctx)
             }
         } catch (_: Exception) {
+            // Прямой запрос не поддерживается прошивкой — открываем список
+            openBatteryOptimizationList(ctx)
         }
+    }
+}
+
+private fun openBatteryOptimizationList(ctx: Context) {
+    try {
+        ctx.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+    } catch (_: Exception) {
     }
 }
 

@@ -59,6 +59,12 @@ object Prefs {
         get() = sp.getBoolean("batteryAsked", false)
         set(v) { sp.edit().putBoolean("batteryAsked", v).apply() }
 
+    // Прямой системный запрос оптимизации уже выполнялся: после отказа система
+    // его больше не показывает — дальше ведём в список настроек
+    var batteryRequestShown: Boolean
+        get() = sp.getBoolean("batteryRequestShown", false)
+        set(v) { sp.edit().putBoolean("batteryRequestShown", v).apply() }
+
     fun init(context: Context) {
         if (::sp.isInitialized) return
         appContext = context.applicationContext

@@ -38,10 +38,10 @@
     <string name="dialog_qr_hint">Наведите камеру другого устройства на этот QR (кнопка «Присоединиться по QR») — группа подставится автоматически.</string>
     <string name="dialog_leave_title">Выйти из группы?</string>
     <string name="btn_copy_and_leave">Копировать и выйти</string>
-    <string name="dialog_battery_title">Экономия батареи</string>
-    <string name="dialog_battery_step1">1. Сейчас откроется системный запрос — разрешите «Не оптимизировать».</string>
-    <string name="dialog_battery_step2">2. MIUI: Настройки → Приложения → LocationShare → Контроль активности → «Нет ограничений»; Автозапуск — вкл.</string>
-    <string name="dialog_battery_step3">3. MIUI: в меню недавних приложений задержите карточку и нажмите замочек 🔒.</string>
+    <string name="dialog_battery_title">Отключите оптимизацию батареи</string>
+    <string name="dialog_battery_body">Приложение сможет делиться геолокацией в фоне без остановок. Нажмите «Разрешить» в системном окне.</string>
+    <string name="dialog_battery_body_list">Найдите LocationShare в списке и выберите «Не оптимизировать».</string>
+    <string name="dialog_battery_body_off">Оптимизация уже отключена — фоновая работа разрешена.</string>
 
     <!-- Тосты -->
     <string name="toast_command_sent">Команда отправлена</string>
