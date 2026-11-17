@@ -13,6 +13,14 @@ import com.google.firebase.database.ValueEventListener
 object Repo {
     private const val TAG = "Repo"
 
+    // «Затухающий» трек: глубина истории и правила записи
+    internal const val HIST_WINDOW_MS = 2 * 3_600_000L // точки старше не хранятся
+
+    private const val HIST_MIN_INTERVAL_MS = 30_000L // не чаще раза в 30 с (кап на машине)
+    private const val HIST_CLEANUP_EVERY_MS = 10 * 60_000L // чистка старого — раз в 10 мин
+    private var lastHistMs = 0L
+    private var lastHistCleanupMs = 0L
+
     // База создана в регионе europe-west1 — нужен явный URL, иначе SDK идёт в us-central1
     internal const val DB_URL =
         "https://locationshare-e897f-default-rtdb.europe-west1.firebasedatabase.app"
@@ -35,7 +43,10 @@ object Repo {
     private fun groupRef(code: String) = db.getReference("groups").child(code)
     private fun devicesRef(code: String) = groupRef(code).child("devices")
 
-    fun publishCurrent(code: String, id: String, name: String, loc: Location, battery: Int?) {
+    // История трека — вне devices: листенер списка устройств не перекачивает её при каждой записи
+    private fun histRef(code: String, id: String) = groupRef(code).child("hist").child(id)
+
+    fun publishCurrent(code: String, id: String, name: String, loc: Location, battery: Int?, moved: Boolean = false) {
         devicesRef(code).child(id).child("current")
             .setValue(
                 mapOf(
@@ -47,6 +58,32 @@ object Repo {
                     "ts" to ServerValue.TIMESTAMP,
                 )
             )
+        // Трек пишем только от «движительных» публикаций: heartbeat и эко-режим
+        // публикуют стоячую точку — иначе трек засоряется повторами на месте
+        if (moved) appendHist(code, id, loc)
+    }
+
+    /** Точка трека: не чаще раза в 30 с; заодно изредка чистим старше окна */
+    private fun appendHist(code: String, id: String, loc: Location) {
+        val now = System.currentTimeMillis()
+        if (now - lastHistMs < HIST_MIN_INTERVAL_MS) return
+        lastHistMs = now
+        histRef(code, id).push().setValue(
+            mapOf(
+                "lat" to loc.latitude,
+                "lon" to loc.longitude,
+                "ts" to ServerValue.TIMESTAMP,
+            )
+        )
+        if (now - lastHistCleanupMs >= HIST_CLEANUP_EVERY_MS) {
+            lastHistCleanupMs = now
+            // Запрос работает и без .indexOn в правилах, Firebase лишь логирует предупреждение.
+            // Query.removeValue() в SDK 21 нет — читаем срез и удаляем по ключам.
+            histRef(code, id).orderByChild("ts").endAt((now - HIST_WINDOW_MS).toDouble()).get()
+                .addOnSuccessListener { snap ->
+                    for (child in snap.children) child.ref.removeValue()
+                }
+        }
     }
 
     fun observe(code: String, onUpdate: (List<DeviceState>) -> Unit): ValueEventListener {
@@ -64,6 +101,7 @@ object Repo {
                     // Самоочистка: записи старше 24 ч (переустановки, ушедшие устройства)
                     if (ts > 0 && System.currentTimeMillis() - ts > 24 * 3_600_000L) {
                         dev.ref.removeValue()
+                        histRef(code, id).removeValue()
                         continue
                     }
 
@@ -90,6 +128,35 @@ object Repo {
 
     fun stop(code: String, listener: ValueEventListener) {
         devicesRef(code).removeEventListener(listener)
+    }
+
+    // ---------- Затухающий трек ----------
+
+    /** Живой листенер истории точек устройства (трек дорисовывается, пока выбрано) */
+    fun observeTrack(code: String, id: String, onUpdate: (List<Pt>) -> Unit): ValueEventListener {
+        val l = object : ValueEventListener {
+            override fun onDataChange(s: DataSnapshot) {
+                val pts = mutableListOf<Pt>()
+                for (p in s.children) {
+                    val lat = p.child("lat").getValue(Double::class.java) ?: continue
+                    val lon = p.child("lon").getValue(Double::class.java) ?: continue
+                    val ts = p.child("ts").getValue(Long::class.java) ?: 0L
+                    pts.add(Pt(lat, lon, ts))
+                }
+                // push-ключи уже хронологичны; сортировка — страховка
+                onUpdate(pts.sortedBy { it.ts })
+            }
+
+            override fun onCancelled(e: DatabaseError) {
+                Log.e(TAG, "observeTrack cancelled: ${e.message}")
+            }
+        }
+        histRef(code, id).addValueEventListener(l)
+        return l
+    }
+
+    fun stopTrack(code: String, id: String, listener: ValueEventListener) {
+        histRef(code, id).removeEventListener(listener)
     }
 
     // ---------- Администрирование ----------
@@ -125,6 +192,7 @@ object Repo {
     /** Удаление устройства из группы (кнопка администратора) */
     fun removeDevice(code: String, id: String) {
         devicesRef(code).child(id).removeValue()
+        histRef(code, id).removeValue()
     }
 
     // ---------- «Найти телефон» ----------

@@ -174,7 +174,8 @@ class LocationService : Service() {
             lastPublished = loc
             lastPublishTs = now
             lastPublishMs = now // публикация прошла — watchdog видит, что сервис жив
-            Repo.publishCurrent(code, Prefs.deviceId, Prefs.deviceName, loc, batteryPct())
+            // moved: точка в трек пишется только при реальном смещении
+            Repo.publishCurrent(code, Prefs.deviceId, Prefs.deviceName, loc, batteryPct(), moved = moved >= 25)
         }
     }
 

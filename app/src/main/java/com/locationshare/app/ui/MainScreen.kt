@@ -95,14 +95,17 @@ import com.locationshare.app.service.WatchdogReceiver
 import com.yandex.mapkit.Animation
 import com.yandex.mapkit.MapKitFactory
 import com.yandex.mapkit.geometry.Point
+import com.yandex.mapkit.geometry.Polyline
 import com.yandex.runtime.image.ImageProvider
 import com.yandex.mapkit.map.CameraListener
 import com.yandex.mapkit.map.CameraPosition
 import com.yandex.mapkit.map.CameraUpdateReason
 import com.yandex.mapkit.map.IconStyle
 import com.yandex.mapkit.map.InputListener
+import com.yandex.mapkit.map.MapObjectCollection
 import com.yandex.mapkit.map.MapObjectTapListener
 import com.yandex.mapkit.map.PlacemarkMapObject
+import com.yandex.mapkit.map.PolylineMapObject
 import com.yandex.mapkit.map.TextStyle
 import com.yandex.mapkit.mapview.MapView
 import java.lang.ref.WeakReference
@@ -125,6 +128,8 @@ fun MainScreen() {
     var update by remember { mutableStateOf<Updater.Update?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var selectedGroup by remember { mutableStateOf<List<String>?>(null) }
+    // Затухающий трек выбранного устройства (история точек из Firebase)
+    var track by remember { mutableStateOf<List<Repo.Pt>>(emptyList()) }
     var focusTrigger by remember { mutableStateOf(0) }
     var focusId by remember { mutableStateOf<String?>(null) }
     var adminId by remember { mutableStateOf<String?>(null) }
@@ -142,6 +147,20 @@ fun MainScreen() {
         onDispose {
             Repo.stop(group, listener)
             Repo.stopAdmin(group, adminL)
+        }
+    }
+
+    // Трек слушаем, только пока устройство выбрано: тап по карте/крестику — отписка
+    DisposableEffect(group, selectedId) {
+        val id = selectedId
+        if (id == null) {
+            onDispose { }
+        } else {
+            val l = Repo.observeTrack(group, id) { track = it }
+            onDispose {
+                Repo.stopTrack(group, id, l)
+                track = emptyList()
+            }
         }
     }
 
@@ -365,6 +384,7 @@ fun MainScreen() {
             follow = follow,
             onFollowChange = { follow = it },
             selectedId = selectedId,
+            track = track,
         )
 
         if (landscape) {
@@ -940,11 +960,16 @@ fun MapArea(
     follow: Boolean = true,
     onFollowChange: (Boolean) -> Unit = {},
     selectedId: String? = null,
+    track: List<Repo.Pt> = emptyList(),
 ) {
     val myId = Prefs.deviceId
     var centered by remember { mutableStateOf(false) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     val placemarks = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
+    // Затухающий трек: слой под пинами + кэш-ключ отрисованного (не перестраиваем на каждый recompose)
+    var trackLayer by remember { mutableStateOf<MapObjectCollection?>(null) }
+    var trackRenderedKey by remember { mutableStateOf<String?>(null) }
+    val trackLines = remember { mutableListOf<PolylineMapObject>() }
     // Текущий цвет пина: при сдвиге палитры (colorMapFor) перерисовываем иконку
     val pinColors = remember { mutableStateMapOf<String, Int>() }
     // Показана ли подпись у пина (и с какой темой карты): кэш, чтобы не звать setText лишний раз
@@ -1123,6 +1148,53 @@ fun MapArea(
                 // Ночная тема карты вслед за системной (MapKit 4.45: setNightModeEnabled)
                 if (mv.map.isNightModeEnabled != darkTheme) mv.map.setNightModeEnabled(darkTheme)
                 val objs = mv.map.mapObjects
+
+                // --- Затухающий трек выбранного устройства ---
+                // Слой создаём до пинов: добавленный раньше — рисуется ниже.
+                val layer = trackLayer ?: objs.addCollection().also { trackLayer = it }
+                val owner = selectedId
+                val cur = owner?.let { o -> devices.firstOrNull { it.id == o }?.current }
+                val trackKey = if (owner != null && cur != null && track.size >= 2)
+                    "$owner|${track.size}|${track.last().ts}|${cur.ts}|${colorMap[owner]}" else null
+                if (trackKey != trackRenderedKey) {
+                    trackRenderedKey = trackKey
+                    trackLines.forEach { layer.remove(it) }
+                    trackLines.clear()
+                    if (trackKey != null && owner != null && cur != null) {
+                        val now = System.currentTimeMillis()
+                        val color = colorMap[owner] ?: colorFor(owner)
+                        // Возраст точки → прозрачность: у края окна (2 ч) почти невидима, свежая ~0.9.
+                        // Квантование в 14 ступеней: соседние точки одной прозрачности
+                        // сливаем в одну полилинию — плавное затухание без сотен объектов.
+                        fun alphaOf(ts: Long): Int {
+                            val t = (1f - (now - ts).toFloat() / Repo.HIST_WINDOW_MS).coerceIn(0f, 1f)
+                            val q = (t * 14f).toInt() / 14f
+                            return (255f * (0.12f + 0.78f * q)).toInt().coerceIn(0, 255)
+                        }
+                        // Последняя точка трека может отставать от current — дотягиваем до пина
+                        val ptsAll: List<Pair<Point, Int>> = buildList {
+                            track.forEach { add(Point(it.lat, it.lon) to alphaOf(it.ts)) }
+                            add(Point(cur.lat, cur.lon) to alphaOf(cur.ts))
+                        }
+                        var start = 0
+                        while (start < ptsAll.size - 1) {
+                            val a = ptsAll[start].second
+                            var end = start + 1
+                            while (end < ptsAll.size && ptsAll[end].second == a) end++
+                            if (a > 0) { // нулевая прозрачность (старый хвост) — пропускаем
+                                val lastIdx = min(end, ptsAll.size - 1)
+                                val line = layer.addPolyline(
+                                    Polyline((start..lastIdx).map { ptsAll[it].first })
+                                )
+                                line.setStrokeColor((a shl 24) or (color and 0xFFFFFF))
+                                line.setStrokeWidth(1.5f + 3.5f * (a / 255f))
+                                trackLines.add(line)
+                            }
+                            start = end
+                        }
+                    }
+                }
+
                 val zoom = mv.map.cameraPosition.zoom
                 val seen = HashSet<String>()
                 for (d in devices) {
