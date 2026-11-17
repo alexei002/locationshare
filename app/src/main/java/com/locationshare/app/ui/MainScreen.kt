@@ -899,6 +899,17 @@ private fun DeviceChip(d: Repo.DeviceState, color: Int, tick: Int, onClick: () -
 // ---------- Карта ----------
 // colorFor/timeAgo/PALETTE вынесены в Format.kt (тот же пакет)
 
+/**
+ * Прозрачность сегмента трека по возрасту точки: свежая — непрозрачная,
+ * у края окна истории — притушенная, но не ниже пола 0.5 (трек видно целиком).
+ * Квантование в 14 ступеней — чтобы соседние точки сливались в одну полилинию.
+ */
+internal fun trackAlpha(ageMs: Long, windowMs: Long = Repo.HIST_WINDOW_MS): Int {
+    val t = (1f - ageMs.toFloat() / windowMs).coerceIn(0f, 1f)
+    val q = (t * 14f).toInt() / 14f
+    return (255f * (0.5f + 0.5f * q)).toInt().coerceIn(0, 255)
+}
+
 private fun pinBitmap(label: String, color: Int): Bitmap {
     val size = 128
     val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -1160,14 +1171,10 @@ fun MapArea(
                     if (trackKey != null && owner != null && cur != null) {
                         val now = System.currentTimeMillis()
                         val color = colorMap[owner] ?: colorFor(owner)
-                        // Возраст точки → прозрачность: у края окна (2 ч) почти невидима, свежая ~0.9.
-                        // Квантование в 14 ступеней: соседние точки одной прозрачности
-                        // сливаем в одну полилинию — плавное затухание без сотен объектов.
-                        fun alphaOf(ts: Long): Int {
-                            val t = (1f - (now - ts).toFloat() / Repo.HIST_WINDOW_MS).coerceIn(0f, 1f)
-                            val q = (t * 14f).toInt() / 14f
-                            return (255f * (0.12f + 0.78f * q)).toInt().coerceIn(0, 255)
-                        }
+                        // Возраст точки → прозрачность: старый хвост тусклее, но не ниже пола 0.5 —
+                        // трек читается целиком. Квантование в 14 ступеней: соседние точки
+                        // одной прозрачности сливаем в одну полилинию (см. trackAlpha).
+                        fun alphaOf(ts: Long): Int = trackAlpha(now - ts)
                         // Последняя точка трека может отставать от current — дотягиваем до пина
                         val ptsAll: List<Pair<Point, Int>> = buildList {
                             track.forEach { add(Point(it.lat, it.lon) to alphaOf(it.ts)) }
@@ -1178,13 +1185,13 @@ fun MapArea(
                             val a = ptsAll[start].second
                             var end = start + 1
                             while (end < ptsAll.size && ptsAll[end].second == a) end++
-                            if (a > 0) { // нулевая прозрачность (старый хвост) — пропускаем
+                            if (a > 0) { // страховка: сегмент с нулевой прозрачностью не рисуем
                                 val lastIdx = min(end, ptsAll.size - 1)
                                 val line = layer.addPolyline(
                                     Polyline((start..lastIdx).map { ptsAll[it].first })
                                 )
                                 line.setStrokeColor((a shl 24) or (color and 0xFFFFFF))
-                                line.setStrokeWidth(1.5f + 3.5f * (a / 255f))
+                                line.setStrokeWidth(3f + 2f * (a / 255f))
                                 trackLines.add(line)
                             }
                             start = end
