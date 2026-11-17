@@ -117,7 +117,7 @@ class LocationService : Service() {
             return START_NOT_STICKY
         }
 
-        startAsForeground()
+        if (!startAsForeground()) return START_NOT_STICKY
 
         if (Prefs.eco) {
             unregister()
@@ -133,10 +133,20 @@ class LocationService : Service() {
         return START_STICKY
     }
 
-    private fun startAsForeground() {
+    private fun startAsForeground(): Boolean {
         val notif = buildNotification()
         val type = if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-        ServiceCompat.startForeground(this, NOTIF_ID, notif, type)
+        return try {
+            ServiceCompat.startForeground(this, NOTIF_ID, notif, type)
+            true
+        } catch (e: Exception) {
+            // Android 14+/HyperOS: запуск location-FGS из фона (boot, watchdog-аларм)
+            // без «eligible state» бросает SecurityException. Не падаем и не зацикливаем
+            // рестарты: тихо стопимся — при следующем открытии карты FGS стартует легально
+            // из foreground (краши на redwood/POCO, версия 2026.11.16).
+            stopSelf()
+            false
+        }
     }
 
     @Suppress("MissingPermission")
