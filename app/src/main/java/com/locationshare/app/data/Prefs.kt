@@ -54,21 +54,16 @@ object Prefs {
         get() = sp.getBoolean("permAutoAsked", false)
         set(v) { sp.edit().putBoolean("permAutoAsked", v).apply() }
 
-    // Автозапрос исключения из оптимизации батареи уже показывался
-    var batteryAsked: Boolean
-        get() = sp.getBoolean("batteryAsked", false)
-        set(v) { sp.edit().putBoolean("batteryAsked", v).apply() }
-
     // Прямой системный запрос оптимизации уже выполнялся: после отказа система
     // его больше не показывает — дальше ведём в список настроек
     var batteryRequestShown: Boolean
         get() = sp.getBoolean("batteryRequestShown", false)
         set(v) { sp.edit().putBoolean("batteryRequestShown", v).apply() }
 
-    // Автодиалог «Разрешить всё время» уже показывался (один раз на установку)
-    var bgLocAsked: Boolean
-        get() = sp.getBoolean("bgLocAsked", false)
-        set(v) { sp.edit().putBoolean("bgLocAsked", v).apply() }
+    // Мастер разрешений уже показывался автоматически (один раз на установку)
+    var masterShown: Boolean
+        get() = sp.getBoolean("masterShown", false)
+        set(v) { sp.edit().putBoolean("masterShown", v).apply() }
 
     fun init(context: Context) {
         if (::sp.isInitialized) return

@@ -41,18 +41,23 @@
     <string name="dialog_battery_title">Отключите оптимизацию батареи</string>
     <string name="dialog_battery_body">Приложение сможет делиться геолокацией в фоне без остановок. Нажмите «Разрешить» в системном окне.</string>
     <string name="dialog_battery_body_list">Найдите LocationShare в списке и выберите «Не оптимизировать».</string>
-    <string name="dialog_battery_body_off">Оптимизация уже отключена — фоновая работа разрешена.</string>
 
-    <!-- Xiaomi: фирменные киллеры поверх AOSP -->
-    <string name="dialog_battery_xiaomi_body">На Xiaomi этого мало: фирменный «Контроль активности» закрывает приложение через пару минут после сворачивания.\n1. «Автозапуск» — включите для LocationShare.\n2. «Контроль активности» — выберите «Нет ограничений».</string>
-    <string name="btn_xiaomi_autostart">Автозапуск</string>
-    <string name="btn_xiaomi_activity">Контроль активности</string>
-
-    <!-- Геолокация «Всё время» -->
+    <!-- Мастер разрешений -->
+    <string name="btn_permissions">Разрешения</string>
+    <string name="btn_allow">Разрешить</string>
+    <string name="btn_done">Готово</string>
+    <string name="dialog_perm_notifications_title">Разрешите уведомления</string>
+    <string name="dialog_perm_notifications_body">Постоянная нотификация «геолокация передаётся» показывается только при включённых уведомлениях.</string>
     <string name="dialog_bgloc_title">Разрешите геолокацию «Всё время»</string>
     <string name="dialog_bgloc_body">Если система закроет приложение и перезапустит трекер в фоне, геолокация «при использовании» у него вырезается — местоположение перестаёт обновляться. Откроется экран доступа: выберите «Разрешить в любом режиме» (на других прошивках — «Разрешать всегда»).</string>
     <string name="btn_grant_always">Выдать «Всё время»</string>
     <string name="settings_bgloc_missing">Геолокация «при использовании»: после закрытия приложения трекер может замолчать. Выберите «Всё время».</string>
+    <string name="dialog_perm_xiaomi_title">Настройте Xiaomi</string>
+    <string name="dialog_perm_xiaomi_body">Фирменный «Контроль активности» закрывает приложение через пару минут после сворачивания. Включите «Автозапуск» и поставьте «Контроль активности — Нет ограничений».</string>
+    <string name="btn_xiaomi_autostart">Автозапуск</string>
+    <string name="btn_xiaomi_activity">Контроль активности</string>
+    <string name="dialog_perm_done_title">Все разрешения выданы</string>
+    <string name="dialog_perm_done_body">Фоновая передача геолокации настроена. На Xiaomi проверьте также «Автозапуск» и «Контроль активности».</string>
 
     <!-- Тосты -->
     <string name="toast_command_sent">Команда отправлена</string>
@@ -71,7 +76,6 @@
     <string name="settings_admin_you">Вы администратор группы</string>
     <string name="btn_qr_group">QR группы</string>
     <string name="btn_change_group">Сменить</string>
-    <string name="btn_battery">Батарея</string>
     <string name="btn_check_updates">Проверить обновления</string>
     <string name="btn_open_release_page">Открыть страницу релиза в браузере</string>
     <string name="update_state_checking">проверяю…</string>

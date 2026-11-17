@@ -19,13 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -67,22 +65,14 @@ fun AppRoot() {
         }
     }
 
-    // Сразу после выдачи локации — исключение из оптимизации батареи (один раз),
-    // затем — геолокация «Всё время» (один раз). Системные диалоги — последовательно.
-    var askBattery by remember { mutableStateOf(false) }
-    var askBgLoc by remember { mutableStateOf(false) }
+    // Сразу после выдачи локации — мастер разрешений (один раз): проведёт
+    // последовательно по всем незакрытым пунктам (уведомления, «Всё время»,
+    // оптимизация батареи, Xiaomi)
+    var showPerms by remember { mutableStateOf(false) }
     LaunchedEffect(granted) {
-        if (granted && !Prefs.batteryAsked) {
-            val ignoring = try {
-                ctx.getSystemService(android.os.PowerManager::class.java)
-                    .isIgnoringBatteryOptimizations(ctx.packageName)
-            } catch (_: Exception) {
-                false
-            }
-            if (ignoring) Prefs.batteryAsked = true else askBattery = true
-        }
-        if (granted && !Prefs.bgLocAsked && !hasBackgroundLocation(ctx)) {
-            askBgLoc = true
+        if (granted && !Prefs.masterShown) {
+            Prefs.masterShown = true
+            if (Step.computeFirst(ctx) != Step.DONE) showPerms = true
         }
     }
 
@@ -105,44 +95,8 @@ fun AppRoot() {
         else -> MainScreen()
     }
 
-    if (askBattery) BatteryDialog {
-        askBattery = false
-        Prefs.batteryAsked = true
-    }
-
-    // Только после закрытия батарейного: иначе два AlertDialog рисуются стопкой
-    if (askBgLoc && !askBattery) BgLocationDialog {
-        askBgLoc = false
-        Prefs.bgLocAsked = true
-    }
+    if (showPerms) PermissionsDialog { showPerms = false }
 }
-
-/** Запрос «Всё время»: диалог → карточка приложения (только так и выдаётся) */
-@Composable
-internal fun BgLocationDialog(onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = {
-                DeviceIntents.openLocationPermission(ctx)
-                onDismiss()
-            }) { Text(stringResource(R.string.btn_grant_always)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_later)) }
-        },
-        title = { Text(stringResource(R.string.dialog_bgloc_title)) },
-        text = { Text(stringResource(R.string.dialog_bgloc_body)) },
-    )
-}
-
-internal fun hasBackgroundLocation(ctx: Context): Boolean =
-    // До Android 10 фоновая геолокация выдаётся вместе с FINE — отдельного
-    // разрешения не существует, checkSelfPermission там всегда вернул бы DENIED
-    Build.VERSION.SDK_INT < 29 ||
-        ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_BACKGROUND_LOCATION) ==
-        PackageManager.PERMISSION_GRANTED
 
 private fun locationPerms(): Array<String> {
     val perms = mutableListOf(

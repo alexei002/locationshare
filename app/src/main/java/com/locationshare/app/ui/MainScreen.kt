@@ -583,7 +583,7 @@ private fun SettingsScreen(
 ) {
     val eco by Prefs.ecoFlow.collectAsState()
     val group = Prefs.groupCode ?: ""
-    var showBat by remember { mutableStateOf(false) }
+    var showPerms by remember { mutableStateOf(false) }
     var showQr by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -690,7 +690,7 @@ private fun SettingsScreen(
                 OutlinedButton(onClick = { confirmLeave = true }) {
                     Text(stringResource(R.string.btn_change_group))
                 }
-                OutlinedButton(onClick = { showBat = true }) { Text(stringResource(R.string.btn_battery)) }
+                OutlinedButton(onClick = { showPerms = true }) { Text(stringResource(R.string.btn_permissions)) }
             }
 
             // Индикатор «Всё время»: без фонового разрешения трекер после закрытия
@@ -792,7 +792,7 @@ private fun SettingsScreen(
             },
         )
     }
-    if (showBat) BatteryDialog { showBat = false }
+    if (showPerms) PermissionsDialog { showPerms = false }
 
     // Подтверждение выхода из группы: код копируем в буфер, иначе обратно не попасть
     if (confirmLeave) {
@@ -893,81 +893,8 @@ private fun DeviceChip(d: Repo.DeviceState, color: Int, tick: Int, onClick: () -
     }
 }
 
-// internal: вызывается также из AppRoot — автозапрос сразу после выдачи локации
-@Composable
-fun BatteryDialog(onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    val alreadyOff = remember {
-        try {
-            ctx.getSystemService(android.os.PowerManager::class.java)
-                ?.isIgnoringBatteryOptimizations(ctx.packageName) == true
-        } catch (_: Exception) {
-            false
-        }
-    }
-    // После первого отказа система молча прячет прямой запрос — ведём в список настроек
-    val firstAsk = !Prefs.batteryRequestShown
-    // У Xiaomi свои киллеры поверх AOSP: показываем шаги и кнопки на фирменные экраны
-    val xiaomi = remember { DeviceIntents.isXiaomi() }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.btn_ok)) } },
-        title = { Text(stringResource(R.string.dialog_battery_title)) },
-        text = {
-            Column {
-                Text(
-                    when {
-                        alreadyOff -> stringResource(R.string.dialog_battery_body_off)
-                        firstAsk -> stringResource(R.string.dialog_battery_body)
-                        else -> stringResource(R.string.dialog_battery_body_list)
-                    }
-                )
-                if (xiaomi) {
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        stringResource(R.string.dialog_battery_xiaomi_body),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { DeviceIntents.openXiaomiAutostart(ctx) }) {
-                            Text(stringResource(R.string.btn_xiaomi_autostart))
-                        }
-                        OutlinedButton(onClick = { DeviceIntents.openXiaomiBatterySaver(ctx) }) {
-                            Text(stringResource(R.string.btn_xiaomi_activity))
-                        }
-                    }
-                }
-            }
-        },
-    )
-    LaunchedEffect(Unit) {
-        if (alreadyOff) return@LaunchedEffect
-        try {
-            if (firstAsk) {
-                Prefs.batteryRequestShown = true
-                ctx.startActivity(
-                    Intent(
-                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        android.net.Uri.parse("package:${ctx.packageName}"),
-                    )
-                )
-            } else {
-                openBatteryOptimizationList(ctx)
-            }
-        } catch (_: Exception) {
-            // Прямой запрос не поддерживается прошивкой — открываем список
-            openBatteryOptimizationList(ctx)
-        }
-    }
-}
-
-private fun openBatteryOptimizationList(ctx: Context) {
-    try {
-        ctx.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-    } catch (_: Exception) {
-    }
-}
+// Разрешения: последовательный мастер — ui/PermissionsDialog.kt
+// (вызов из настроек и автозапрос из AppRoot после первой выдачи локации)
 
 // ---------- Карта ----------
 // colorFor/timeAgo/PALETTE вынесены в Format.kt (тот же пакет)
