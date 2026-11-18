@@ -1205,7 +1205,10 @@ fun MapArea(
                 val layer = trackLayer ?: objs.addCollection().also { trackLayer = it }
                 val owner = selectedId
                 val cur = owner?.let { o -> devices.firstOrNull { it.id == o }?.current }
-                val trackKey = if (owner != null && cur != null && track.size >= 2)
+                // >=1: ptsAll и так дописывает cur — одной точки истории достаточно
+                // для отрезка «последняя точка → сейчас» (иначе только-что-двигшееся
+                // устройство молчит, пока не накопит вторую, — до многих минут)
+                val trackKey = if (owner != null && cur != null && track.size >= 1)
                     "$owner|${track.size}|${track.last().ts}|${cur.ts}|${colorMap[owner]}" else null
                 if (trackKey != trackRenderedKey) {
                     trackRenderedKey = trackKey
