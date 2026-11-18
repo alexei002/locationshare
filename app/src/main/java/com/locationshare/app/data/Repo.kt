@@ -35,6 +35,8 @@ object Repo {
         val current: Pt?,
         val accuracy: Float,
         val battery: Int?,
+        // Кастомный цвет устройства "#RRGGBB" (null = авто-назначение палитрой)
+        val color: String? = null,
     ) {
         val online: Boolean
             get() = current != null && System.currentTimeMillis() - current.ts < 15 * 60_000
@@ -47,20 +49,26 @@ object Repo {
     private fun histRef(code: String, id: String) = groupRef(code).child("hist").child(id)
 
     fun publishCurrent(code: String, id: String, name: String, loc: Location, battery: Int?, moved: Boolean = false) {
-        devicesRef(code).child(id).child("current")
-            .setValue(
-                mapOf(
-                    "lat" to loc.latitude,
-                    "lon" to loc.longitude,
-                    "acc" to loc.accuracy.toDouble(),
-                    "bat" to battery,
-                    "name" to name,
-                    "ts" to ServerValue.TIMESTAMP,
-                )
-            )
+        // current перезаписывается целиком — кастомный цвет обязан быть в payload, иначе слетит
+        val payload = mutableMapOf<String, Any?>(
+            "lat" to loc.latitude,
+            "lon" to loc.longitude,
+            "acc" to loc.accuracy.toDouble(),
+            "bat" to battery,
+            "name" to name,
+            "ts" to ServerValue.TIMESTAMP,
+        )
+        Prefs.customColor?.let { payload["color"] = it }
+        devicesRef(code).child(id).child("current").setValue(payload)
         // Трек пишем только от «движительных» публикаций: heartbeat и эко-режим
         // публикуют стоячую точку — иначе трек засоряется повторами на месте
         if (moved) appendHist(code, id, loc)
+    }
+
+    /** Немедленная публикация кастомного цвета (не ждёт следующей точки); null = сброс на авто */
+    fun setColor(code: String, id: String, hex: String?) {
+        val ref = devicesRef(code).child(id).child("current").child("color")
+        if (hex == null) ref.removeValue() else ref.setValue(hex)
     }
 
     /** Точка трека: не чаще раза в 30 с; заодно изредка чистим старше окна */
@@ -112,6 +120,7 @@ object Repo {
                             current = Pt(lat, lon, ts),
                             accuracy = (cur.child("acc").getValue(Double::class.java) ?: 50.0).toFloat(),
                             battery = cur.child("bat").getValue(Int::class.java),
+                            color = cur.child("color").getValue(String::class.java),
                         )
                     )
                 }

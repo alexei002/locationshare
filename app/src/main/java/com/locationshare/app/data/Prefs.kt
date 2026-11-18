@@ -44,6 +44,14 @@ object Prefs {
         get() = ecoFlow.value
         set(v) { ecoFlow.value = v; sp.edit().putBoolean("eco", v).apply() }
 
+    // Кастомный цвет на карте "#RRGGBB" (null = авто-назначение палитрой)
+    var customColor: String?
+        get() = sp.getString("color", null)
+        set(v) {
+            if (v == null) sp.edit().remove("color").apply()
+            else sp.edit().putString("color", v).apply()
+        }
+
     // Онбординг «Пригласите близких» уже показан
     var onboardingShown: Boolean
         get() = sp.getBoolean("onboarded", false)
