@@ -13,13 +13,43 @@ private val PALETTE = intArrayOf(
 
 internal fun colorFor(id: String): Int = PALETTE[abs(id.hashCode()) % PALETTE.size]
 
+/** Палитра для UI выбора цвета (настройки) */
+internal val PALETTE_COLORS: List<Int> = PALETTE.toList()
+
+/** ARGB → "#RRGGBB" (формат поля color в Firebase и Prefs) */
+internal fun colorHex(c: Int): String = "#%06X".format(c and 0xFFFFFF)
+
+/** "#RRGGBB" → ARGB; строгий формат, иначе null (= авто-цвет) */
+internal fun parseColorHex(s: String?): Int? {
+    if (s == null || s.length != 7 || s[0] != '#') return null
+    val hex = s.substring(1)
+    if (hex.any { it !in '0'..'9' && it !in 'a'..'f' && it !in 'A'..'F' }) return null
+    return (0xFF shl 24) or hex.toInt(16)
+}
+
 /**
  * Стабильное назначение цветов устройствам: ids сортируются и получают цвета палитры
  * по порядку, циклично при >16 устройствах. В отличие от hash в colorFor не даёт
- * дублей цветов, пока устройств не больше 16.
+ * дублей цветов, пока устройств не больше 16. Устройства из [custom] фиксируют свой
+ * цвет, остальным палитра раздаётся с пропуском занятого (уникальность сохраняется,
+ * пока палитры хватает; вся палитра занята кастомными — цикл по полной палитре).
  */
-internal fun colorMapFor(ids: Collection<String>): Map<String, Int> =
-    ids.sorted().withIndex().associate { (i, id) -> id to PALETTE[i % PALETTE.size] }
+internal fun colorMapFor(ids: Collection<String>, custom: Map<String, Int> = emptyMap()): Map<String, Int> {
+    val free = PALETTE.filter { it !in custom.values.toSet() }
+    val pool = if (free.isEmpty()) PALETTE.toList() else free
+    val result = HashMap<String, Int>(ids.size)
+    var i = 0
+    for (id in ids.sorted()) {
+        val c = custom[id]
+        if (c != null) {
+            result[id] = c
+        } else {
+            result[id] = pool[i % pool.size]
+            i++
+        }
+    }
+    return result
+}
 
 internal fun timeAgo(ts: Long): String {
     if (ts <= 0) return "—"
