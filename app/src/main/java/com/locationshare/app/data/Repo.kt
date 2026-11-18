@@ -13,7 +13,7 @@ import com.google.firebase.database.ValueEventListener
 object Repo {
     private const val TAG = "Repo"
 
-    // «Затухающий» трек: глубина истории и правила записи
+    // Трек: глубина истории и правила записи
     internal const val HIST_WINDOW_MS = 4 * 3_600_000L // точки старше не хранятся
 
     private const val HIST_MIN_INTERVAL_MS = 30_000L // не чаще раза в 30 с (кап на машине)
@@ -141,7 +141,7 @@ object Repo {
         devicesRef(code).removeEventListener(listener)
     }
 
-    // ---------- Затухающий трек ----------
+    // ---------- Трек ----------
 
     /** Живой листенер истории точек устройства (трек дорисовывается, пока выбрано) */
     fun observeTrack(code: String, id: String, onUpdate: (List<Pt>) -> Unit): ValueEventListener {

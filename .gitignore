@@ -6,3 +6,5 @@ release.keystore
 *.iml
 captures/
 .codegraph-wsl/
+opencode.jsonc
+AGENTS.md
