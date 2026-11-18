@@ -1030,6 +1030,9 @@ fun MapArea(
     // Схлопнутые группы: ключ «grp:<id первого>» → общий кружок с числом
     val groupPins = remember { mutableStateMapOf<String, PlacemarkMapObject>() }
     val groupMembers = remember { mutableStateMapOf<String, List<String>>() }
+    // Размер группы на кружке: при выходе выбранного из кластера состав меняется —
+    // перерисовываем иконку (иначе кружок «3» висит над группой из двух)
+    val groupSizes = remember { mutableStateMapOf<String, Int>() }
     val tapListeners = remember { mutableStateMapOf<String, MapObjectTapListener>() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val devicesNow by rememberUpdatedState(devices)
@@ -1341,6 +1344,7 @@ fun MapArea(
                         }
                     }
                     val gp = groupPins.getOrPut(key) {
+                        groupSizes[key] = g.size
                         objs.addPlacemark().apply {
                             setIcon(
                                 ImageProvider.fromBitmap(clusterBitmap(g.size)),
@@ -1349,12 +1353,20 @@ fun MapArea(
                             addTapListener(WeakReference(tapListeners[key]))
                         }
                     }
+                    if (groupSizes[key] != g.size) {
+                        groupSizes[key] = g.size
+                        gp.setIcon(
+                            ImageProvider.fromBitmap(clusterBitmap(g.size)),
+                            IconStyle().apply { scale = 0.6f },
+                        )
+                    }
                     gp.geometry = Point(head.current!!.lat, head.current!!.lon)
                 }
                 for (k in groupPins.keys - groupKeys) {
                     groupPins.remove(k)?.let { objs.remove(it) }
                     tapListeners.remove(k)
                     groupMembers.remove(k)
+                    groupSizes.remove(k)
                 }
 
                 val me = devices.firstOrNull { it.id == myId && it.current != null }?.current
