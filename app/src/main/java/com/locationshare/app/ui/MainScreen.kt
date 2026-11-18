@@ -11,6 +11,7 @@ import android.graphics.Paint
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -625,6 +626,48 @@ private fun SettingsScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
+
+            // Цвет на карте: выбранный публикуется в группу сразу, «Авто» — сброс на палитру
+            var pickedColor by remember { mutableStateOf(Prefs.customColor) }
+            Text(
+                stringResource(R.string.settings_color_label),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 20.dp),
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+            ) {
+                Surface(
+                    onClick = {
+                        pickedColor = null
+                        Prefs.customColor = null
+                        Repo.setColor(group, myId, null)
+                    },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = if (pickedColor == null) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.settings_color_auto), fontSize = 10.sp)
+                    }
+                }
+                for (c in PALETTE_COLORS) {
+                    val hex = colorHex(c)
+                    Surface(
+                        onClick = {
+                            pickedColor = hex
+                            Prefs.customColor = hex
+                            Repo.setColor(group, myId, hex)
+                        },
+                        shape = CircleShape,
+                        color = androidx.compose.ui.graphics.Color(c),
+                        border = if (pickedColor == hex) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                        modifier = Modifier.size(40.dp),
+                    ) {}
+                }
+            }
 
             // Администрирование группы
             Text(

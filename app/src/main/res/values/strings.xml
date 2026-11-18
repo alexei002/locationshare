@@ -70,6 +70,8 @@
     <string name="settings_eco_title">Эко-режим</string>
     <string name="settings_eco_subtitle">Минимум батареи: без постоянного сервиса, раз в 15 мин</string>
     <string name="settings_device_name_label">Имя устройства</string>
+    <string name="settings_color_label">Цвет на карте</string>
+    <string name="settings_color_auto">Авто</string>
     <string name="settings_admin_section">Администрирование</string>
     <string name="settings_admin_none">Администратор не назначен</string>
     <string name="btn_become_admin">Стать администратором</string>
