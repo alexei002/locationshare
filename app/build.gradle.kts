@@ -21,8 +21,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // Схема версий: год.минор.патч (2026.11.21). versionCode = ГГГГММ*100+патч
-        versionCode = 20261125
-        versionName = "2026.11.25"
+        versionCode = 20261126
+        versionName = "2026.11.26"
         buildConfigField("String", "MAPKIT_KEY", "\"${localProps.getProperty("MAPKIT_KEY", "")}\"")
         buildConfigField("String", "UPDATE_URL", "\"${localProps.getProperty("UPDATE_URL", "")}\"")
         ndk {
