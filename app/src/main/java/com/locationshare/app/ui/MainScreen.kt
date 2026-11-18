@@ -272,7 +272,7 @@ fun MainScreen() {
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { focusId = d.id; focusTrigger++ }
+                                    .clickable { selectedId = d.id; selectedGroup = null; focusId = d.id; focusTrigger++ }
                                     .padding(vertical = 4.dp),
                             ) {
                                 Box(
@@ -1257,7 +1257,8 @@ fun MapArea(
                 }
                 val assigned = HashSet<String>()
                 val groups = mutableListOf<List<Repo.DeviceState>>()
-                val sorted = withPoints.sortedByDescending { it.current?.ts ?: 0L }
+                // Выбранное устройство не сворачиваем в кластер: его пин должен быть виден
+                val sorted = withPoints.filter { it.id != selectedId }.sortedByDescending { it.current?.ts ?: 0L }
                 for (d in sorted) {
                     if (d.id in assigned || d.id !in screenPos) continue
                     val (sx, sy) = screenPos[d.id]!!
@@ -1276,9 +1277,10 @@ fun MapArea(
                 }
 
                 val groupedIds = groups.flatten().map { it.id }.toHashSet()
-                // одиночные — видимы, в группе — скрыты
+                // одиночные — видимы, в группе — скрыты; выбранное устройство всегда видно
+                // (иначе трек выбранного из кластера рисуется без пина)
                 for (d in withPoints) {
-                    placemarks[d.id]?.setVisible(d.id !in groupedIds)
+                    placemarks[d.id]?.setVisible(d.id !in groupedIds || d.id == selectedId)
                 }
                 // общие кружки
                 val groupKeys = HashSet<String>()
