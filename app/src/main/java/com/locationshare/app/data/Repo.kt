@@ -14,7 +14,7 @@ object Repo {
     private const val TAG = "Repo"
 
     // «Затухающий» трек: глубина истории и правила записи
-    internal const val HIST_WINDOW_MS = 2 * 3_600_000L // точки старше не хранятся
+    internal const val HIST_WINDOW_MS = 4 * 3_600_000L // точки старше не хранятся
 
     private const val HIST_MIN_INTERVAL_MS = 30_000L // не чаще раза в 30 с (кап на машине)
     private const val HIST_CLEANUP_EVERY_MS = 10 * 60_000L // чистка старого — раз в 10 мин
