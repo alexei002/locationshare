@@ -87,14 +87,35 @@ object Repo {
         )
         if (now - lastHistCleanupMs >= HIST_CLEANUP_EVERY_MS) {
             lastHistCleanupMs = now
-            // Запрос работает и без .indexOn в правилах, Firebase лишь логирует предупреждение.
-            // Query.removeValue() в SDK 21 нет — читаем срез и удаляем по ключам.
-            histRef(code, id).orderByChild("ts").endAt((now - HIST_WINDOW_MS).toDouble()).get()
-                .addOnSuccessListener { snap ->
-                    for (child in snap.children) child.ref.removeValue()
-                }
+            runHistCleanup(code, id)
         }
     }
+
+    /**
+     * Чистка старше окна. Граница — от серверного ts самой свежей точки минус окно
+     * (свежая пишется за миллисекунды до чистки, её ts ≈ серверному «сейчас»):
+     * локальные часы телефона в расчёт не входят — убежавшие вперёд часы
+     * раньше стирали весь трек целиком. Узел читаем целиком без orderBy:
+     * тот без .indexOn всё равно качал бы его на клиента, но с предупреждением в логе.
+     */
+    private fun runHistCleanup(code: String, id: String) {
+        histRef(code, id).get().addOnSuccessListener { snap ->
+            var newestTs = 0L
+            for (c in snap.children) {
+                val ts = c.child("ts").getValue(Long::class.java) ?: continue
+                if (ts > newestTs) newestTs = ts
+            }
+            if (newestTs <= 0L) return@addOnSuccessListener // пустой узел — чистить нечего
+            for (c in snap.children) {
+                val ts = c.child("ts").getValue(Long::class.java) ?: continue
+                if (isStaleHistPoint(ts, newestTs)) c.ref.removeValue()
+            }
+        }
+    }
+
+    /** Точка старше окна истории; окно отсчитывается от серверного ts свежей точки */
+    internal fun isStaleHistPoint(ts: Long, newestServerTs: Long): Boolean =
+        ts <= newestServerTs - HIST_WINDOW_MS
 
     fun observe(code: String, onUpdate: (List<DeviceState>) -> Unit): ValueEventListener {
         val l = object : ValueEventListener {
