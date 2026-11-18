@@ -19,7 +19,6 @@
     <string name="btn_all">Все</string>
     <string name="cd_show_all_devices">Показать все устройства</string>
     <string name="cd_center_on_me">Центрировать на мне</string>
-    <string name="chip_waiting_for_points">ждём точки…</string>
 
     <!-- contentDescription -->
     <string name="cd_close">Закрыть</string>

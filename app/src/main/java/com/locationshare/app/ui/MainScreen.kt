@@ -10,12 +10,10 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -35,8 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -71,7 +67,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
@@ -394,7 +389,7 @@ fun MainScreen() {
         )
 
         if (landscape) {
-            // Ландшафт: баннер и карточки — у верхнего края, внизу только кнопки и чипы
+            // Ландшафт: баннер и карточки — у верхнего края, внизу только кнопки
             Column(
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(top = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -410,7 +405,7 @@ fun MainScreen() {
             }
         }
 
-        // Нижний столбец: (портрет: карточки →) кнопки → панель чипов (не перекрываются)
+        // Нижний столбец: (портрет: карточки →) кнопки карты (не перекрываются)
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -420,12 +415,26 @@ fun MainScreen() {
                 deviceCard()
             }
 
-            // Кнопки карты: «Все» и «центрировать на мне»
+            // Кнопки карты: настройки, «Все» и «центрировать на мне»
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End,
-                modifier = Modifier.fillMaxWidth().padding(end = 12.dp, bottom = 6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(end = 12.dp, bottom = 12.dp),
             ) {
+                Surface(
+                    onClick = { showSettings = true },
+                    shape = CircleShape,
+                    tonalElevation = 3.dp,
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
                 val showAllCd = stringResource(R.string.cd_show_all_devices)
                 Surface(
                     onClick = { fitTrigger++ },
@@ -449,49 +458,6 @@ fun MainScreen() {
                     else MaterialTheme.colorScheme.onPrimaryContainer,
                 ) {
                     Icon(Icons.Filled.LocationOn, contentDescription = stringResource(R.string.cd_center_on_me))
-                }
-            }
-
-            // Компактная нижняя панель: чипы устройств + кнопка настроек
-            Surface(
-                tonalElevation = 3.dp,
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                ) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        if (devices.isEmpty()) {
-                            item {
-                                Text(
-                                    stringResource(R.string.chip_waiting_for_points),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
-                                )
-                            }
-                        }
-                        items(devices, key = { it.id }) { d ->
-                            // Тап по чипу — открыть карточку, долгий тап — прозвон
-                            DeviceChip(
-                                d,
-                                color = colorMap[d.id] ?: colorFor(d.id),
-                                tick = tick,
-                                onClick = { selectedId = d.id; selectedGroup = null },
-                                onLongClick = { ringTarget = d },
-                            )
-                        }
-                    }
-                    IconButton(onClick = { showSettings = true }) {
-                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
-                    }
                 }
             }
         }
@@ -904,45 +870,6 @@ private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChang
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun DeviceChip(d: Repo.DeviceState, color: Int, tick: Int, onClick: () -> Unit, onLongClick: () -> Unit) {
-    val me = d.id == Prefs.deviceId
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = if (d.online) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface,
-        modifier = Modifier.padding(vertical = 2.dp),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .alpha(if (d.online) 1f else 0.5f),
-        ) {
-            Box(Modifier.size(10.dp).background(androidx.compose.ui.graphics.Color(color), CircleShape))
-            Spacer(Modifier.width(6.dp))
-            Text(if (me) "Вы" else d.name, style = MaterialTheme.typography.bodySmall)
-            d.current?.let {
-                tick // тикер: пересчитать «N мин» (и цвет устаревания)
-                Text(
-                    "  ${timeAgo(it.ts)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (System.currentTimeMillis() - it.ts > WatchdogReceiver.INTERVAL_MS) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.outline,
-                )
-            }
-            d.battery?.let {
-                Text(
-                    "  $it%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
-            }
-        }
-    }
-}
-
 // Разрешения: последовательный мастер — ui/PermissionsDialog.kt
 // (вызов из настроек и автозапрос из AppRoot после первой выдачи локации)
 
@@ -1141,7 +1068,7 @@ fun MapArea(
         // Зум считает сам MapKit: ручная формула завышала зум, т.к. width/height —
         // физические пиксели, а шкала зума MapKit определена в dp (расхождение ~log2(density))
         val bb = BoundingBox(Point(minLat, minLon), Point(maxLat, maxLon))
-        // ScreenRect — в физических пикселях; снизу поле больше: там карточки и панель чипов
+        // ScreenRect — в физических пикселях; снизу поле больше: там карточки и кнопки
         val w = mv.width.toFloat()
         val h = mv.height.toFloat()
         val rect = ScreenRect(
