@@ -72,6 +72,24 @@
     <string name="settings_device_name_label">Имя устройства</string>
     <string name="settings_color_label">Цвет на карте</string>
     <string name="settings_color_auto">Авто</string>
+    <string-array name="palette_color_names">
+        <item>Красный</item>
+        <item>Синий</item>
+        <item>Зелёный</item>
+        <item>Оранжевый</item>
+        <item>Фиолетовый</item>
+        <item>Бирюзовый</item>
+        <item>Тёмно-оранжевый</item>
+        <item>Индиго</item>
+        <item>Жёлтый</item>
+        <item>Морской волны</item>
+        <item>Малиновый</item>
+        <item>Коричневый</item>
+        <item>Лаймовый</item>
+        <item>Пурпурный</item>
+        <item>Серо-синий</item>
+        <item>Тёмно-серый</item>
+    </string-array>
     <string name="settings_admin_section">Администрирование</string>
     <string name="settings_admin_none">Администратор не назначен</string>
     <string name="btn_become_admin">Стать администратором</string>

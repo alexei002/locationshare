@@ -76,6 +76,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -629,6 +630,7 @@ private fun SettingsScreen(
 
             // Цвет на карте: выбранный публикуется в группу сразу, «Авто» — сброс на палитру
             var pickedColor by remember { mutableStateOf(Prefs.customColor) }
+            val colorNames = stringArrayResource(R.array.palette_color_names)
             Text(
                 stringResource(R.string.settings_color_label),
                 style = MaterialTheme.typography.titleSmall,
@@ -646,14 +648,15 @@ private fun SettingsScreen(
                     },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    border = if (pickedColor == null) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                    border = if (pickedColor == null) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                    else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                     modifier = Modifier.size(40.dp),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(stringResource(R.string.settings_color_auto), fontSize = 10.sp)
                     }
                 }
-                for (c in PALETTE_COLORS) {
+                for ((i, c) in PALETTE_COLORS.withIndex()) {
                     val hex = colorHex(c)
                     Surface(
                         onClick = {
@@ -663,8 +666,12 @@ private fun SettingsScreen(
                         },
                         shape = CircleShape,
                         color = androidx.compose.ui.graphics.Color(c),
-                        border = if (pickedColor == hex) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
-                        modifier = Modifier.size(40.dp),
+                        // невыбранным — тонкая обводка: тёмные цвета видны в тёмной теме
+                        border = if (pickedColor == hex) BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                        else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .semantics { contentDescription = colorNames[i] },
                     ) {}
                 }
             }

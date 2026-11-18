@@ -49,17 +49,19 @@ object Repo {
     private fun histRef(code: String, id: String) = groupRef(code).child("hist").child(id)
 
     fun publishCurrent(code: String, id: String, name: String, loc: Location, battery: Int?, moved: Boolean = false) {
-        // current перезаписывается целиком — кастомный цвет обязан быть в payload, иначе слетит
-        val payload = mutableMapOf<String, Any?>(
-            "lat" to loc.latitude,
-            "lon" to loc.longitude,
-            "acc" to loc.accuracy.toDouble(),
-            "bat" to battery,
-            "name" to name,
-            "ts" to ServerValue.TIMESTAMP,
-        )
-        Prefs.customColor?.let { payload["color"] = it }
-        devicesRef(code).child(id).child("current").setValue(payload)
+        // Цвет живёт отдельным полем devices/{id}/color: publishCurrent перезаписывает
+        // current целиком, а setColor не гоняется с ним за поле в одном узле
+        devicesRef(code).child(id).child("current")
+            .setValue(
+                mapOf(
+                    "lat" to loc.latitude,
+                    "lon" to loc.longitude,
+                    "acc" to loc.accuracy.toDouble(),
+                    "bat" to battery,
+                    "name" to name,
+                    "ts" to ServerValue.TIMESTAMP,
+                )
+            )
         // Трек пишем только от «движительных» публикаций: heartbeat и эко-режим
         // публикуют стоячую точку — иначе трек засоряется повторами на месте
         if (moved) appendHist(code, id, loc)
@@ -67,7 +69,7 @@ object Repo {
 
     /** Немедленная публикация кастомного цвета (не ждёт следующей точки); null = сброс на авто */
     fun setColor(code: String, id: String, hex: String?) {
-        val ref = devicesRef(code).child(id).child("current").child("color")
+        val ref = devicesRef(code).child(id).child("color")
         if (hex == null) ref.removeValue() else ref.setValue(hex)
     }
 
@@ -120,7 +122,7 @@ object Repo {
                             current = Pt(lat, lon, ts),
                             accuracy = (cur.child("acc").getValue(Double::class.java) ?: 50.0).toFloat(),
                             battery = cur.child("bat").getValue(Int::class.java),
-                            color = cur.child("color").getValue(String::class.java),
+                            color = dev.child("color").getValue(String::class.java),
                         )
                     )
                 }
