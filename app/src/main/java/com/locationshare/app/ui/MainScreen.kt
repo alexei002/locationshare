@@ -219,7 +219,7 @@ fun MainScreen() {
     val selected = devices.firstOrNull { it.id == selectedId }
     val selectedDevices = selectedGroup?.mapNotNull { id -> devices.firstOrNull { it.id == id } }
     // Стабильные цвета устройств без коллизий (hash из colorFor мог дублировать цвета)
-    val colorMap = remember(devices) { colorMapFor(devices.map { it.id }) }
+    val colorMap = remember(devices) { colorMapFor(devices.map { it.id }, customColors(devices)) }
 
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -992,7 +992,7 @@ fun MapArea(
     val devicesNow by rememberUpdatedState(devices)
     val darkTheme = isSystemInDarkTheme()
     // Стабильные цвета устройств без коллизий
-    val colorMap = remember(devices) { colorMapFor(devices.map { it.id }) }
+    val colorMap = remember(devices) { colorMapFor(devices.map { it.id }, customColors(devices)) }
 
     // Стили подписей пинов (объекты переиспользуются, в update не создаём).
     // Текст с контрастной обводкой: белым по тёмной карте, тёмным по светлой.

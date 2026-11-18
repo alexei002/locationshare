@@ -56,4 +56,11 @@ class ColorMapTest {
         assertEquals(p[5], r["x"])
         assertEquals(p[5], r["y"])
     }
+
+    @Test
+    fun customColorsOfDevices_parsesSkipsGarbage() {
+        fun d(id: String, c: String?) = com.locationshare.app.data.Repo.DeviceState(id, id, null, 0f, null, c)
+        val devs = listOf(d("a", "#43A047"), d("b", null), d("c", "мусор"))
+        assertEquals(mapOf("a" to 0xFF43A047.toInt()), customColors(devs))
+    }
 }

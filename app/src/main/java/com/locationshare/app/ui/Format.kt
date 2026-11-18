@@ -1,5 +1,6 @@
 package com.locationshare.app.ui
 
+import com.locationshare.app.data.Repo
 import kotlin.math.abs
 
 // Чистое форматирование без Android-зависимостей (вынесено из MainScreen.kt для тестируемости)
@@ -49,6 +50,11 @@ internal fun colorMapFor(ids: Collection<String>, custom: Map<String, Int> = emp
         }
     }
     return result
+}
+
+/** Кастомные цвета устройств: только валидные "#RRGGBB" из DeviceState.color */
+internal fun customColors(devices: List<Repo.DeviceState>): Map<String, Int> = buildMap {
+    for (d in devices) parseColorHex(d.color)?.let { put(d.id, it) }
 }
 
 internal fun timeAgo(ts: Long): String {
