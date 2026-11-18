@@ -424,14 +424,17 @@ fun MainScreen() {
                     .navigationBarsPadding()
                     .padding(end = 12.dp, bottom = 12.dp),
             ) {
+                val settingsCd = stringResource(R.string.cd_settings)
                 Surface(
                     onClick = { showSettings = true },
                     shape = CircleShape,
                     tonalElevation = 3.dp,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .semantics { contentDescription = settingsCd },
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.cd_settings))
+                        Icon(Icons.Filled.Settings, contentDescription = null)
                     }
                 }
                 Spacer(Modifier.width(10.dp))
